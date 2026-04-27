@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistente de Escritura Pro</title>
+
+<!-- Enlaces PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f172a">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Librería de Iconos Modernos -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+  /* --- ESTILOS BASE Y VARIABLES --- */
+  :root {
+    --bg-main: #f1f5f9;      
+    --bg-panel: #ffffff;     
+    --topbar-bg: #0f172a;    
+    --border: #e2e8f0;       
+    --text-main: #1e293b;    
+    --text-muted: #64748b;   
+    --accent: #2563eb;       
+    --accent-hover: #1d4ed8; 
+    --radius: 8px;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body, html {
+    height: 100%;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main);
+    background: var(--bg-main);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* --- TOPBAR --- */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--topbar-bg);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    z-index: 20;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  .topbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .tb-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.05);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all var(--transition);
+  }
+
+  .tb-btn:hover { background: rgba(255,255,255,0.2); }
+  .tb-btn.primary { background: var(--accent); border-color: var(--accent); }
+  .tb-btn.primary:hover { background: var(--accent-hover); }
+  .tb-btn.secondary { background: #10b981; border-color: #10b981; } 
+  .tb-btn.secondary:hover { background: #059669; }
+
+  /* --- ESTRUCTURA PRINCIPAL --- */
+  #app {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #main-content {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* --- PANEL DE CHAT (IZQUIERDA) --- */
+  #chat-container {
+    width: 0;
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    transition: width var(--transition), opacity var(--transition);
+    opacity: 0;
+    visibility: hidden;
+    flex-shrink: 0;
+    box-shadow: 1px 0 10px rgba(0,0,0,0.05);
+    z-index: 10;
+  }
+
+  body.chat-visible #chat-container {
+    width: 40%;
+    opacity: 1;
+    visibility: visible;
+    border-right: 1px solid var(--border);
+  }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  .chat-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    padding: 4px;
+    border-radius: 4px;
+  }
+  .chat-close:hover { background: var(--bg-main); color: var(--text-main); }
+
+  #chat-messages {
+    flex: 1;
+    padding: 1.25rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #f8fafc;
+  }
+
+  .chat-message {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    max-width: 90%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    white-space: pre-wrap;
+  }
+
+  .chat-message.system {
+    background: var(--border);
+    color: var(--text-main);
+    align-self: center;
+    text-align: center;
+    max-width: 100%;
+    font-size: 0.85rem;
+  }
+
+  .chat-message.user {
+    background: var(--accent);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+  }
+
+  .chat-message.model {
+    background: white;
+    color: var(--text-main);
+    align-self: flex-start;
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 2px;
+  }
+
+  #chat-form {
+    display: flex;
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+  }
+
+  #chat-input {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    outline: none;
+    font-family: inherit;
+  }
+  #chat-input:focus { border-color: var(--accent); }
+
+  #chat-form button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  #chat-form button:hover { background: var(--accent-hover); }
+
+  /* --- EDITOR (DERECHA) --- */
+  #editor-container {
+    flex: 1; 
+    min-width: 0; 
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-main);
+  }
+
+  #editor-toolbar {
+    background: var(--bg-panel);
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    z-index: 5;
+  }
+
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 12px;
+    border-right: 1px solid var(--border);
+  }
+  .toolbar-group:last-child { border-right: none; }
+
+  #editor-toolbar button, #editor-toolbar select, #editor-toolbar input[type="color"] {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+
+  #editor-toolbar select { border: 1px solid var(--border); padding: 4px 8px; }
+  #editor-toolbar input[type="color"] { padding: 2px; width: 30px; height: 30px; border: 1px solid var(--border); }
+  #editor-toolbar button:hover { background: var(--bg-main); }
+
+  #page-counter {
+    margin-left: auto;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  #pages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* DOCUMENTO ÚNICO CONTINUO */
+  #text-editor {
+    background: white;
+    width: 100%;
+    max-width: 800px; 
+    min-height: 1130px; 
+    height: max-content; 
+    flex-shrink: 0; 
+    white-space: pre-wrap; 
+    overflow-wrap: break-word; 
+    word-break: break-word;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0,0,0,0.03);
+    margin-bottom: 4rem;
+    padding: 80px 70px; 
+    box-sizing: border-box;
+    outline: none;
+    font-family: 'Arial', sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #000;
+    transition: width var(--transition), max-width var(--transition);
+  }
+
+  #text-editor:focus {
+    box-shadow: 0 0 0 2px var(--accent), 0 4px 15px rgba(0, 0, 0, 0.05);
+  }
+
+  #text-editor:empty::before {
+    content: 'Comienza a escribir o pega tu texto aquí...\n\n💡 Tip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
+    color: #94a3b8;
+    pointer-events: none;
+  }
+
+  /* ESTILOS PARA LOS ERRORES IA */
+  .ai-suggestion {
+    border-bottom: 2px dashed #8b5cf6; 
+    background-color: rgba(139, 92, 246, 0.1);
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .ai-suggestion:hover { background-color: rgba(139, 92, 246, 0.2); }
+
+  /* CAJA DE SUGERENCIAS FLOTANTE */
+  .suggestion-box {
+    position: absolute;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 1000;
+    overflow: hidden;
+    min-width: 200px;
+    max-width: 300px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+  }
+
+  .suggestion-box .sugg-header {
+    background: #f8fafc;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 500;
+    color: #475569;
+    font-size: 0.8rem;
+  }
+
+  .suggestion-box .sugg-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--accent);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+  }
+  
+  .suggestion-box .sugg-item:hover { background: #f1f5f9; }
+
+  @media (max-width: 768px) {
+    #text-editor { padding: 40px 24px; }
+    body.chat-visible #chat-container { width: 100%; position: absolute; height: 100%; z-index: 50; }
+  }
+
+  /* COMPONENTES AUXILIARES */
+  #loading {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.8);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 100;
+  }
+  #loading.show { display: flex; }
+  
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  #loading p { font-weight: 500; color: var(--text-main); }
+
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--topbar-bg);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform var(--transition);
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar" role="banner">
+  <div class="brand">
+    <i data-lucide="pen-tool"></i>
+    Asistente de Escritura
+  </div>
+  <div class="topbar-actions">
+    <!-- NUEVO: Botón para cambiar API KEY -->
+    <button id="change-api-key-btn" class="tb-btn" title="Configurar API Key"><i data-lucide="key" size="16"></i> API Key</button>
+    <button id="save-now-btn" class="tb-btn" title="Guardar Progreso"><i data-lucide="save" size="16"></i> Guardar</button>
+    <button id="toggle-chat-btn" class="tb-btn" title="Abrir/Cerrar Chat IA"><i data-lucide="message-square" size="16"></i> Chat IA</button>
+    
+    <!-- BOTONES IA -->
+    <button id="check-errors-btn" class="tb-btn primary" title="Subrayar errores en selección o documento"><i data-lucide="check-circle" size="16"></i> Corregir</button>
+    <button id="check-style-btn" class="tb-btn secondary" title="Recibir crítica literaria en el chat"><i data-lucide="sparkles" size="16"></i> Asistente</button>
+    
+    <button id="download-docx-btn" class="tb-btn" title="Descargar Documento"><i data-lucide="download" size="16"></i> Descargar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <main id="main-content">
+    
+    <!-- Left Panel: Chat (sidebar) -->
+    <div id="chat-container">
+      <div class="chat-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="bot" size="18" style="color: var(--accent)"></i> Asistente IA
+        </div>
+        <button id="close-chat-btn" class="chat-close" aria-label="Cerrar chat"><i data-lucide="x" size="18"></i></button>
+      </div>
+      <div id="chat-messages">
+        <div class="chat-message system">
+          ¡Hola! <br><br>Para no gastar tu cuota gratuita de IA rápidamente, te recomiendo <b>seleccionar con el ratón el párrafo</b> que quieres revisar y luego presionar "Corregir" o "Asistente". <br><br>💡 La ortografía tradicional ahora la maneja tu navegador automáticamente de forma local.
+        </div>
+      </div>
+      <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="Pregúntale algo a tu asistente..." autocomplete="off">
+        <button type="submit" aria-label="Enviar mensaje"><i data-lucide="send" size="16"></i></button>
+      </form>
+    </div>
+
+    <!-- Right Panel: Editor -->
+    <div id="editor-container">
+      <div id="editor-toolbar">
+        <div class="toolbar-group">
+          <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="16"></i></button>
+          <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="16"></i></button>
+        </div>
+
+        <div class="toolbar-group">
+          <button type="button" id="bold-btn" title="Negrita"><i data-lucide="bold" size="16"></i></button>
+          <button type="button" id="italic-btn" title="Cursiva"><i data-lucide="italic" size="16"></i></button>
+          <button type="button" id="underline-btn" title="Subrayado"><i data-lucide="underline" size="16"></i></button>
+        </div>
+
+        <div class="toolbar-group">
+          <button type="button" id="align-left-btn" title="Alinear a la izquierda"><i data-lucide="align-left" size="16"></i></button>
+          <button type="button" id="align-center-btn" title="Centrar texto"><i data-lucide="align-center" size="16"></i></button>
+          <button type="button" id="align-right-btn" title="Alinear a la derecha"><i data-lucide="align-right" size="16"></i></button>
+        </div>
+
+        <div class="toolbar-group">
+          <select id="font-family-select" aria-label="Tipo de letra" title="Fuente">
+            <option value="Arial, sans-serif" selected>Arial</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="'Inter', sans-serif">Inter</option>
+          </select>
+          <input type="color" id="font-color-picker" value="#000000" title="Color de texto">
+          <select id="font-size-select" aria-label="Tamaño de fuente" title="Tamaño">
+            <option value="12px">12</option>
+            <option value="14px" selected>14</option>
+            <option value="16px">16</option>
+            <option value="20px">20</option>
+            <option value="24px">24</option>
+          </select>
+        </div>
+
+        <span id="page-counter" aria-live="polite">Aprox. 1 página(s)</span>
+      </div>
+      
+      <div id="pages-container">
+        <!-- Editor Único de Texto -->
+        <div id="text-editor" contenteditable="true" spellcheck="true" lang="es"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="loading"><div class="spinner"></div><p id="loading-msg">Procesando...</p></div>
+
+<script>
+// --- REGISTRO DEL SERVICE WORKER (Para la PWA) ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      console.log('Service Worker registrado con éxito:', reg.scope);
+    }).catch(err => {
+      console.log('Error al registrar Service Worker:', err);
+    });
+  });
+}
+
+// --- Inicializar Iconos ---
+document.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+});
+
+// --- VARIABLES GLOBALES DEL ESTADO ---
+let geminiApiKey = null;
+let supportedModelName = null;
+let conversationHistory = []; // Solo para el chat conversacional
+let currentEditorText = "";
+
+// --- ELEMENTOS DEL DOM ---
+let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
+
+document.addEventListener('DOMContentLoaded', () => {
+  chatMessages = document.getElementById('chat-messages');
+  chatForm = document.getElementById('chat-form');
+  chatInput = document.getElementById('chat-input');
+  textEditor = document.getElementById('text-editor');
+  loadingIndicator = document.getElementById('loading');
+  
+  loadSavedText();
+  updatePageCounter();
+  startAutoSave();
+
+  textEditor.addEventListener('input', updatePageCounter);
+
+  // Manejador de clics para Sugerencias IA
+  textEditor.addEventListener('click', (event) => {
+    if (event.target.classList?.contains('ai-suggestion')) {
+      showAISuggestions(event.target);
+    }
+  });
+
+  // UI Toggles
+  const toggleChatBtn = document.getElementById('toggle-chat-btn');
+  const closeChatBtn = document.getElementById('close-chat-btn');
+  if (toggleChatBtn) toggleChatBtn.addEventListener('click', () => document.body.classList.toggle('chat-visible'));
+  if (closeChatBtn) closeChatBtn.addEventListener('click', () => document.body.classList.remove('chat-visible'));
+
+  // Manejador de Cambio de API KEY
+  const changeApiKeyBtn = document.getElementById('change-api-key-btn');
+  if (changeApiKeyBtn) {
+    changeApiKeyBtn.addEventListener('click', () => {
+      const currentKey = localStorage.getItem('gemini_api_key') || '';
+      const newKey = prompt('Introduce tu clave API de Google AI Studio:', currentKey);
+      if (newKey !== null && newKey.trim() !== '') {
+        localStorage.setItem('gemini_api_key', newKey.trim());
+        geminiApiKey = newKey.trim();
+        showToast('✅ API Key actualizada');
+      }
+    });
+  }
+
+  // Toolbar actions
+  const btn = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
+  
+  btn('undo-btn', () => { document.execCommand('undo', false, null); textEditor.focus(); });
+  btn('redo-btn', () => { document.execCommand('redo', false, null); textEditor.focus(); });
+  btn('bold-btn', () => applyTextStyle('bold'));
+  btn('italic-btn', () => applyTextStyle('italic'));
+  btn('underline-btn', () => applyTextStyle('underline'));
+  btn('align-left-btn', () => applyTextAlignment('justifyLeft'));
+  btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
+  btn('align-right-btn', () => applyTextAlignment('justifyRight'));
+
+  // Evitar pérdida de foco
+  document.querySelectorAll('#editor-toolbar button').forEach(el => {
+    el.addEventListener('mousedown', (event) => event.preventDefault());
+  });
+
+  document.getElementById('font-family-select')?.addEventListener('change', (e) => {
+    if (e.target.value) { applyTextFamily(e.target.value); textEditor.focus(); }
+  });
+  document.getElementById('font-color-picker')?.addEventListener('input', (e) => applyTextColor(e.target.value));
+  document.getElementById('font-size-select')?.addEventListener('change', (e) => {
+    if (e.target.value) { applyTextSize(e.target.value); textEditor.focus(); }
+  });
+
+  // Acciones principales AI
+  btn('check-errors-btn', handleSmartCorrection);
+  btn('check-style-btn', handleLiteraryAnalysis);
+  
+  btn('save-now-btn', () => saveContent(true));
+  btn('download-docx-btn', downloadAsDocx);
+
+  if (chatForm) chatForm.addEventListener('submit', handleChatMessage);
+
+  // Atajos de Teclado
+  document.addEventListener('keydown', (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    if (event.altKey) return;
+    switch (event.key.toLowerCase()) {
+      case 'b': event.preventDefault(); applyTextStyle('bold'); break;
+      case 'i': event.preventDefault(); applyTextStyle('italic'); break;
+      case 'u': event.preventDefault(); applyTextStyle('underline'); break;
+      case 'z': event.preventDefault(); document.execCommand('undo', false, null); break;
+      case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
+    }
+  });
+});
+
+// --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
+function getTargetText() {
+  const selection = window.getSelection();
+  const selectedText = selection.toString().trim();
+  
+  if (selectedText.length > 10) {
+    return { text: selectedText, isSelection: true };
+  }
+  return { text: textEditor.innerText, isSelection: false };
+}
+
+// --- FUNCIÓN 1: CORRECCIÓN ESTRUCTURAL (JSON) ---
+async function handleSmartCorrection() {
+  const target = getTargetText();
+  if (!target.text.trim()) {
+    showToast("Escribe o selecciona texto para analizar.");
+    return;
+  }
+  
+  document.body.classList.add('chat-visible');
+
+  const smartPrompt = `Actúa como corrector de estilo avanzado.
+Analiza el siguiente texto y devuelve ÚNICAMENTE un objeto JSON válido.
+Estructura estricta obligatoria:
+{
+  "comentario_general": "Resumen muy breve (1 línea).",
+  "correcciones": [
+    {
+      "original": "palabra o frase exacta del documento con error",
+      "sugerencia": "tu corrección",
+      "explicacion": "Razón corta"
+    }
+  ]
+}
+Deja el array vacío si está perfecto. No devuelvas NADA MÁS que el JSON.
+Texto a analizar ${target.isSelection ? "(Fragmento seleccionado)" : "(Documento completo)"}:
+---
+${target.text}
+---`;
+
+  const tempHistory = [{ role: 'user', parts: [{ text: smartPrompt }] }];
+  
+  const apiKey = await getApiKey();
+  if (!apiKey) return;
+
+  showLoading(`Analizando ${target.isSelection ? "selección" : "todo el documento"}...`);
+  
+  try {
+    let result = await callGoogleAI(tempHistory, apiKey);
+    
+    let cleanedResult = result.replace(/```json/gi, '').replace(/```/g, '').trim();
+    
+    let analysisData;
+    try {
+      analysisData = JSON.parse(cleanedResult);
+    } catch (e) {
+      console.error("Error al parsear JSON:", e, cleanedResult);
+      addMessageToChat("Hubo un problema estructurando las correcciones. Intenta de nuevo.", 'system');
+      hideLoading();
+      return;
+    }
+
+    if (analysisData.comentario_general) {
+      addMessageToChat(`📝 ${analysisData.comentario_general}`, 'model');
+    }
+
+    if (analysisData.correcciones && analysisData.correcciones.length > 0) {
+      applyAIHighlights(analysisData.correcciones);
+      showToast(`${analysisData.correcciones.length} sugerencias aplicadas en el editor.`);
+      if(target.isSelection) addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
+      else addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en todo el texto. Haz clic en ellas.`, 'system');
+    } else {
+      addMessageToChat("¡El texto que revisé está excelente! No veo necesidad de cambios gramaticales.", 'model');
+    }
+
+  } catch (error) {
+    addMessageToChat(`Error: ${error.message}`, 'system');
+  } finally {
+    hideLoading();
+  }
+}
+
+// --- FUNCIÓN 2: CRÍTICA LITERARIA (Con rol Argentino) ---
+async function handleLiteraryAnalysis() {
+  const target = getTargetText();
+  if (!target.text.trim()) {
+    showToast("Escribe algo de texto para analizar.");
+    return;
+  }
+
+  document.body.classList.add('chat-visible');
+
+  // PROMPT ACTUALIZADO CON ROL Y CHISTES
+  const personaPrompt = `Reglas de formato: No uses markdown. Separá párrafos con una línea en blanco.
+Usá exactamente esta estructura:
+
+Chequeo General, che viejo:
+...
+
+Crítica constructiva:
+Objetiva de Estilo, Gramática y redaccion en un pequeño resumen inicial:
+...
+
+Sugerencias de Estilo: ideas y conceptos literarios para mejorar el texto, sin reescribirlo:
+...
+
+Tu Turno, Pelado:
+...
+
+Rol: Sos un crítico literario. Podés usar expresiones como 'che viejo' o 'pelado' con moderación. Nunca ataques a la persona, solo chistes sobre pelados al estilo de tobogán de piojos, dirigidos solo al texto.
+Tarea: Analizá el texto. Marcá errores gramaticales y de redacción, explica cómo corregirlos y da sugerencias concretas de mejora.
+
+Texto a analizar ${target.isSelection ? "(Fragmento)" : "(Completo)"}:
+---
+${target.text}
+---`;
+
+  conversationHistory.push({ role: 'user', parts: [{ text: personaPrompt }] });
+  
+  const apiKey = await getApiKey();
+  if (!apiKey) return;
+
+  showLoading("Que Mira Bobo, leyendo...");
+  
+  try {
+    let result = await callGoogleAI(conversationHistory, apiKey);
+    result = result.replace(/[*#_]/g, ''); 
+    conversationHistory.push({ role: 'model', parts: [{ text: result }] });
+    addMessageToChat(result, 'model');
+  } catch (error) {
+    addMessageToChat(`Error: ${error.message}`, 'system');
+    conversationHistory.pop(); 
+  } finally {
+    hideLoading();
+  }
+}
+
+// --- MANEJO DE HIGHLIGHTS IA EN EL EDITOR ---
+function applyAIHighlights(correcciones) {
+  let html = textEditor.innerHTML;
+  
+  correcciones.forEach(c => {
+    if (c.original && c.sugerencia && c.original.length > 2) {
+      const escapedOriginal = c.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(?![^<]*>)(${escapedOriginal})`, "g");
+      
+      const safeSug = escapeHtml(c.sugerencia);
+      const safeExp = escapeHtml(c.explicacion);
+      
+      html = html.replace(regex, `<span class="ai-suggestion" data-sug="${safeSug}" data-exp="${safeExp}">$1</span>`);
+    }
+  });
+
+  textEditor.innerHTML = html;
+}
+
+function showAISuggestions(el) {
+  const sug = el.getAttribute('data-sug');
+  const exp = el.getAttribute('data-exp');
+  
+  if (!sug) return;
+  
+  const box = document.createElement('div');
+  box.className = 'suggestion-box';
+  box.innerHTML = `
+    <div class="sugg-header">${exp || 'Sugerencia de mejora'}</div>
+    <div class="sugg-item" title="Aplicar reemplazo">
+      ✨ <strong>${sug}</strong>
+    </div>
+  `;
+  
+  const rect = el.getBoundingClientRect();
+  box.style.top = `${rect.bottom + window.scrollY + 5}px`; 
+  box.style.left = `${rect.left + window.scrollX}px`;
+  
+  document.querySelectorAll('.suggestion-box').forEach(b => b.remove());
+  document.body.appendChild(box);
+  
+  box.querySelector('.sugg-item').addEventListener('click', () => {
+    const textNode = document.createTextNode(sug);
+    el.parentNode.replaceChild(textNode, el);
+    saveContent();
+    box.remove();
+    showToast("Cambio aplicado");
+  });
+  
+  setTimeout(() => document.addEventListener('click', function close(e) {
+    if (!box.contains(e.target)) { box.remove(); document.removeEventListener('click', close); }
+  }), 100);
+}
+
+
+// --- CHAT TRADICIONAL ---
+async function handleChatMessage(e) {
+  e.preventDefault();
+  if (!chatInput || !chatInput.value.trim()) return;
+  const userMessage = chatInput.value.trim();
+  addMessageToChat(userMessage, 'user');
+  
+  if (conversationHistory.length > 10) {
+     conversationHistory.splice(1, 2);
+  }
+
+  if (conversationHistory.length === 0) {
+    // Al iniciar el chat libre, le inyectamos la misma personalidad humorística
+    conversationHistory = [{ role: 'user', parts: [{ text: "Actúa como un asistente literario argentino, honesto y directo, usa expresiones como 'che viejo' o 'pelado', y responde a: " + userMessage }] }];
+  } else {
+    conversationHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+  }
+  
+  chatInput.value = '';
+  
+  const apiKey = await getApiKey();
+  if (!apiKey) return;
+  
+  showLoading("Bocha lista, ideas en camino...");
+  try {
+    let result = await callGoogleAI(conversationHistory, apiKey);
+    result = result.replace(/[*#_]/g, ''); 
+    conversationHistory.push({ role: 'model', parts: [{ text: result }] });
+    addMessageToChat(result, 'model');
+  } catch (error) {
+    addMessageToChat(`Error: ${error.message}`, 'system');
+    conversationHistory.pop();
+  } finally {
+    hideLoading();
+  }
+}
+
+// --- UI CHAT ---
+function addMessageToChat(text, role) {
+  if (!chatMessages) return;
+  const msgEl = document.createElement('div');
+  msgEl.className = `chat-message ${role}`;
+  const p = document.createElement('p');
+  msgEl.appendChild(p);
+  chatMessages.appendChild(msgEl);
+  
+  if (role === 'model') typeMessage(p, text);
+  else p.textContent = text;
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function typeMessage(element, text) {
+  let index = 0;
+  element.textContent = '';
+  const intervalId = setInterval(() => {
+    if (index < text.length) {
+      element.textContent += text[index];
+      index++;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    } else {
+      clearInterval(intervalId);
+    }
+  }, 10);
+}
+
+// --- HERRAMIENTAS DE TEXTO ---
+function preserveSelection(callback) {
+  const selection = window.getSelection();
+  const ranges = [];
+  if (selection && selection.rangeCount) {
+    for (let i = 0; i < selection.rangeCount; i++) ranges.push(selection.getRangeAt(i).cloneRange());
+  }
+  callback();
+  if (selection) {
+    selection.removeAllRanges();
+    ranges.forEach(r => selection.addRange(r));
+  }
+}
+
+function applyTextStyle(cmd) { preserveSelection(() => { document.execCommand('styleWithCSS', false, true); document.execCommand(cmd, false, null); }); textEditor.focus(); }
+function applyTextColor(col) { preserveSelection(() => { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, col); }); textEditor.focus(); }
+function applyTextAlignment(cmd) { preserveSelection(() => document.execCommand(cmd, false, null)); textEditor.focus(); }
+function applyTextFamily(font) { preserveSelection(() => { document.execCommand('styleWithCSS', false, true); document.execCommand('fontName', false, font); }); textEditor.focus(); }
+
+function applyTextSize(sizeValue) {
+  preserveSelection(() => {
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('fontSize', false, 7);
+    textEditor.querySelectorAll('font[size="7"]').forEach(el => {
+      const span = document.createElement('span');
+      span.style.fontSize = sizeValue;
+      span.innerHTML = el.innerHTML;
+      el.parentNode.replaceChild(span, el);
+    });
+  });
+  textEditor.focus();
+}
+
+// --- IA / API FETCH ---
+async function getApiKey() {
+  if (geminiApiKey) return geminiApiKey;
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) { geminiApiKey = savedKey; return savedKey; }
+  const userKey = prompt('Por favor, introduce tu API Key de Google AI Studio:', '');
+  if (userKey && userKey.trim() !== '') {
+    localStorage.setItem('gemini_api_key', userKey);
+    geminiApiKey = userKey;
+    showToast('API Key guardada');
+    return userKey;
+  }
+  showToast('API Key necesaria para la IA.');
+  return null;
+}
+
+// Optimizamos para buscar siempre los modelos "flash" que son más rápidos y baratos en tokens
+async function findSupportedModel(apiKey) {
+    if (supportedModelName) return supportedModelName;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("No se pudo obtener modelos.");
+      const data = await response.json();
+      
+      const bestModel = data.models.find(m => m.name.includes('gemini-2.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
+                        data.models.find(m => m.name.includes('gemini-1.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
+                        data.models.find(m => m.name.includes('gemini') && m.supportedGenerationMethods?.includes('generateContent'));
+      
+      if (bestModel) { 
+        supportedModelName = bestModel.name; 
+        return supportedModelName; 
+      }
+      throw new Error('Sin modelo compatible.');
+    } catch(e) {
+       console.error("Fallo al contactar API:", e);
+       throw e;
+    }
+}
+
+async function callGoogleAI(history, apiKey) {
+  const modelToUse = await findSupportedModel(apiKey);
+  const url = `https://generativelanguage.googleapis.com/v1beta/${modelToUse}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: history })
+  });
+  const data = await response.json();
+  if (data.candidates && data.candidates[0].content.parts[0].text) {
+    return data.candidates[0].content.parts[0].text;
+  }
+  throw new Error(`Error API: ${data.error?.message || 'Petición rechazada (quizás por filtros de seguridad)'}`);
+}
+
+// --- PAGINACIÓN SIMULADA ---
+function updatePageCounter() {
+  const counter = document.getElementById('page-counter');
+  if (!counter || !textEditor) return;
+  const height = textEditor.scrollHeight;
+  const estimatedPages = Math.max(1, Math.ceil(height / 1130));
+  counter.textContent = `Aprox. ${estimatedPages} página(s)`;
+}
+
+// --- AUTOGUARDADO / DESCARGA ---
+function saveContent(feedback = false) {
+  if (!textEditor) return;
+  localStorage.setItem('editor_content', textEditor.innerHTML);
+  if (feedback) showToast("Progreso guardado");
+}
+
+function loadSavedText() {
+  const savedContent = localStorage.getItem('editor_content');
+  if (savedContent) {
+    textEditor.innerHTML = savedContent;
+  }
+}
+function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
+
+function downloadAsDocx() {
+  const content = textEditor.innerHTML;
+  const plainText = textEditor.innerText;
+  
+  if (!plainText.trim()) { showToast("Nada que descargar"); return; }
+  const title = prompt("Título:", "Documento") || "Documento";
+  
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Arial, sans-serif; padding:40px; max-width:800px; margin:0 auto; line-height:1.6;"><h1>${title}</h1><div>${content}</div></body></html>`;
+  
+  const blob = new Blob([html], { type: 'application/msword' });
+  const link = document.createElement('a'); 
+  link.href = URL.createObjectURL(blob); 
+  link.download = `${title}.doc`;
+  document.body.appendChild(link); 
+  link.click(); 
+  document.body.removeChild(link);
+  showToast("Documento descargado");
+}
+
+// Utils UI
+function showLoading(msg) { document.getElementById('loading-msg').textContent=msg; loadingIndicator.classList.add('show'); }
+function hideLoading() { loadingIndicator.classList.remove('show'); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+</script>
+</body>
+</html>
