@@ -8,7 +8,8 @@
 <!-- Enlaces PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f172a">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Librería de Iconos Modernos -->
@@ -671,7 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- LECTOR EN VOZ ALTA ---
 function toggleReadAloud() {
-  if (isSpeaking) {
+  // Detener si ya está hablando o si el motor se quedó "trabado" en segundo plano
+  if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
     currentUtterances = [];
@@ -683,48 +685,69 @@ function toggleReadAloud() {
 
   let textToRead = "";
   const selection = window.getSelection();
+  const selectedText = selection.toString().trim();
 
-  // 1. Determinar qué leer (Selección vs Cursor)
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0);
-    if (!selection.isCollapsed) {
-      // Si hay texto seleccionado, leer solo eso
-      textToRead = selection.toString();
+  try {
+    // 1. Si el usuario pintó un texto de azul (selección manual)
+    if (selectedText.length > 0) {
+      textToRead = selectedText;
       showToast("Leyendo selección...");
-    } else if (textEditor.contains(range.commonAncestorContainer)) {
-      // Si no hay selección pero el cursor está en el editor, leer desde el cursor hasta el final
-      const rangeToEnd = document.createRange();
-      rangeToEnd.setStart(range.startContainer, range.startOffset);
-      rangeToEnd.setEndAfter(textEditor.lastChild || textEditor);
-      textToRead = rangeToEnd.toString();
-      showToast("Leyendo desde el cursor...");
+    }
+    // 2. Si no hay selección, pero dejó el cursor titilando en algún lado
+    else if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      
+      // Verificamos si el cursor está realmente dentro de nuestro editor
+      if (textEditor.contains(range.commonAncestorContainer)) {
+        const rangeToEnd = document.createRange();
+        rangeToEnd.selectNodeContents(textEditor); 
+        rangeToEnd.setStart(range.startContainer, range.startOffset); 
+        textToRead = rangeToEnd.toString().trim();
+        
+        // Si justo hizo click en la última letra y no hay texto adelante, lee todo el documento
+        if (textToRead.length === 0) {
+            textToRead = textEditor.innerText.trim();
+            showToast("Leyendo todo el documento...");
+        } else {
+            showToast("Leyendo desde el cursor...");
+        }
+      } else {
+        // El cursor no estaba en el editor (capaz hizo click en la barra o se perdió el foco)
+        textToRead = textEditor.innerText.trim();
+        showToast("Leyendo todo el documento...");
+      }
     } else {
-      // Si el cursor no está en el editor, leer todo
-      textToRead = textEditor.innerText;
+      // Respaldo total: no hay selección ni cursor válido
+      textToRead = textEditor.innerText.trim();
       showToast("Leyendo todo el documento...");
     }
-  } else {
-    textToRead = textEditor.innerText;
+  } catch (err) {
+    console.warn("Error calculando el cursor, leyendo todo:", err);
+    textToRead = textEditor.innerText.trim();
     showToast("Leyendo todo el documento...");
   }
 
-  if (!textToRead.trim()) {
+  if (!textToRead || textToRead.length === 0) {
     showToast("No hay texto para leer.");
     return;
   }
 
-  // 2. Fragmentar el texto para evitar que se cuelgue
-  // Divide por oraciones usando signos de puntuación o saltos de línea
-  const chunks = textToRead.match(/[^.!?\n]+[.!?\n]+/g) || [textToRead];
+  // 3. Fragmentar el texto para evitar que colapse
+  const chunks = textToRead.match(/[^.!?\n]+[.!?\n]*/g) || [textToRead];
   currentUtterances = chunks.map(c => c.trim()).filter(c => c.length > 0);
   
-  if (currentUtterances.length === 0) currentUtterances = [textToRead];
+  if (currentUtterances.length === 0) {
+    showToast("Error procesando texto.");
+    return;
+  }
 
   isSpeaking = true;
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
   lucide.createIcons();
   
-  playNextChunk();
+  // Limpiamos cualquier voz "fantasma" trabada y empezamos tras un mínimo respiro
+  window.speechSynthesis.cancel();
+  setTimeout(playNextChunk, 50);
 }
 
 function playNextChunk() {
@@ -740,20 +763,26 @@ function playNextChunk() {
   utterance.lang = 'es-ES';
   
   utterance.onend = () => {
-    // Cuando termina un fragmento, pasa al siguiente
-    if (isSpeaking) playNextChunk();
+    // Pausa ligeramente más larga (150ms) para que el navegador no se ahogue al cambiar de frase
+    setTimeout(() => {
+      if (isSpeaking) playNextChunk();
+    }, 150);
   };
   
   utterance.onerror = (e) => {
-    console.error("Error en la síntesis de voz", e);
-    // Intentar seguir con el siguiente fragmento si ocurre un error menor
+    console.warn("Interrupción de voz:", e);
     if (e.error !== 'interrupted' && e.error !== 'canceled') {
-      if (isSpeaking) playNextChunk(); 
+      setTimeout(() => {
+        if (isSpeaking) playNextChunk(); 
+      }, 150);
+    } else {
+      isSpeaking = false;
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
     }
   };
 
-  // Guardar en variable global para evitar que el navegador elimine el proceso (Garbage Collection)
-  window.currentUtterance = utterance;
+  window.currentUtterance = utterance; 
   window.speechSynthesis.speak(utterance);
 }
 
