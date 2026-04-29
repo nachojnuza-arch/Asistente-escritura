@@ -19,12 +19,12 @@
   :root {
     --bg-main: #f1f5f9;      
     --bg-panel: #ffffff;     
-    --topbar-bg: #1f79df;    
+    --topbar-bg: #0f172a;    
     --border: #e2e8f0;       
     --text-main: #1e293b;    
     --text-muted: #64748b;   
     --accent: #2563eb;       
-    --accent-hover: #0c9423; 
+    --accent-hover: #1d4ed8; 
     --radius: 8px;           /* Bordes más redondeados */
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
     --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
@@ -624,7 +624,8 @@ let currentEditorText = "";
 
 // Variables para el lector de voz
 let isSpeaking = false;
-let speechUtterance = new SpeechSynthesisUtterance();
+let currentUtterances = []; // Lista de fragmentos de texto
+window.currentUtterance = null; // Evita que el navegador elimine el audio de la memoria
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -654,70 +655,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeChatBtn = document.getElementById('close-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', () => document.body.classList.toggle('chat-visible'));
   if (closeChatBtn) closeChatBtn.addEventListener('click', () => document.body.classList.remove('chat-visible'));
-
-  // Manejador de Cambio de API KEY
-  const changeApiKeyBtn = document.getElementById('change-api-key-btn');
-  if (changeApiKeyBtn) {
-    changeApiKeyBtn.addEventListener('click', () => {
-      const currentKey = localStorage.getItem('gemini_api_key') || '';
-      const newKey = prompt('Introduce tu clave API de Google AI Studio:', currentKey);
-      if (newKey !== null && newKey.trim() !== '') {
-        localStorage.setItem('gemini_api_key', newKey.trim());
-        geminiApiKey = newKey.trim();
-        showToast('API Key actualizada');
-      }
-    });
-  }
-
-  // Toolbar actions
-  const btn = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
-  
-  btn('undo-btn', () => { document.execCommand('undo', false, null); textEditor.focus(); });
-  btn('redo-btn', () => { document.execCommand('redo', false, null); textEditor.focus(); });
-  btn('bold-btn', () => applyTextStyle('bold'));
-  btn('italic-btn', () => applyTextStyle('italic'));
-  btn('underline-btn', () => applyTextStyle('underline'));
-  btn('align-left-btn', () => applyTextAlignment('justifyLeft'));
-  btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
-  btn('align-right-btn', () => applyTextAlignment('justifyRight'));
-  
-  // Vincular botón de leer en voz alta
-  btn('read-aloud-btn', toggleReadAloud);
-
-  // Evitar pérdida de foco
-  document.querySelectorAll('#editor-toolbar button').forEach(el => {
-    el.addEventListener('mousedown', (event) => event.preventDefault());
-  });
-
-  document.getElementById('font-family-select')?.addEventListener('change', (e) => {
-    if (e.target.value) { applyTextFamily(e.target.value); textEditor.focus(); }
-  });
-  document.getElementById('font-color-picker')?.addEventListener('input', (e) => applyTextColor(e.target.value));
-  document.getElementById('font-size-select')?.addEventListener('change', (e) => {
-    if (e.target.value) { applyTextSize(e.target.value); textEditor.focus(); }
-  });
-
-  // Acciones principales AI
-  btn('check-errors-btn', handleSmartCorrection);
-  btn('check-style-btn', handleLiteraryAnalysis);
-  
-  btn('save-now-btn', () => saveContent(true));
-  btn('download-docx-btn', downloadAsDocx);
-
-  if (chatForm) chatForm.addEventListener('submit', handleChatMessage);
-
-  // Atajos de Teclado
-  document.addEventListener('keydown', (event) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    if (event.altKey) return;
-    switch (event.key.toLowerCase()) {
-      case 'b': event.preventDefault(); applyTextStyle('bold'); break;
-      case 'i': event.preventDefault(); applyTextStyle('italic'); break;
-      case 'u': event.preventDefault(); applyTextStyle('underline'); break;
-      case 'z': event.preventDefault(); document.execCommand('undo', false, null); break;
-      case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
-    }
-  });
+      // Atajos de Teclado
+      document.addEventListener('keydown', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        if (event.altKey) return;
+        switch (event.key.toLowerCase()) {
+          case 'b': event.preventDefault(); applyTextStyle('bold'); break;
+          case 'i': event.preventDefault(); applyTextStyle('italic'); break;
+          case 'u': event.preventDefault(); applyTextStyle('underline'); break;
+          case 'z': event.preventDefault(); document.execCommand('undo', false, null); break;
+          case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
+        }
+      });
 });
 
 // --- LECTOR EN VOZ ALTA ---
@@ -725,35 +674,87 @@ function toggleReadAloud() {
   if (isSpeaking) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
+    currentUtterances = [];
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
     showToast("Lectura detenida");
     return;
   }
 
-  const target = getTargetText();
-  const textToRead = target.text;
+  let textToRead = "";
+  const selection = window.getSelection();
+
+  // 1. Determinar qué leer (Selección vs Cursor)
+  if (selection && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    if (!selection.isCollapsed) {
+      // Si hay texto seleccionado, leer solo eso
+      textToRead = selection.toString();
+      showToast("Leyendo selección...");
+    } else if (textEditor.contains(range.commonAncestorContainer)) {
+      // Si no hay selección pero el cursor está en el editor, leer desde el cursor hasta el final
+      const rangeToEnd = document.createRange();
+      rangeToEnd.setStart(range.startContainer, range.startOffset);
+      rangeToEnd.setEndAfter(textEditor.lastChild || textEditor);
+      textToRead = rangeToEnd.toString();
+      showToast("Leyendo desde el cursor...");
+    } else {
+      // Si el cursor no está en el editor, leer todo
+      textToRead = textEditor.innerText;
+      showToast("Leyendo todo el documento...");
+    }
+  } else {
+    textToRead = textEditor.innerText;
+    showToast("Leyendo todo el documento...");
+  }
 
   if (!textToRead.trim()) {
     showToast("No hay texto para leer.");
     return;
   }
 
-  speechUtterance.text = textToRead;
-  speechUtterance.lang = 'es-ES'; // Configurado para español
+  // 2. Fragmentar el texto para evitar que se cuelgue
+  // Divide por oraciones usando signos de puntuación o saltos de línea
+  const chunks = textToRead.match(/[^.!?\n]+[.!?\n]+/g) || [textToRead];
+  currentUtterances = chunks.map(c => c.trim()).filter(c => c.length > 0);
+  
+  if (currentUtterances.length === 0) currentUtterances = [textToRead];
 
-  speechUtterance.onend = () => {
+  isSpeaking = true;
+  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+  lucide.createIcons();
+  
+  playNextChunk();
+}
+
+function playNextChunk() {
+  if (!isSpeaking || currentUtterances.length === 0) {
     isSpeaking = false;
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
+    return;
+  }
+
+  const text = currentUtterances.shift();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'es-ES';
+  
+  utterance.onend = () => {
+    // Cuando termina un fragmento, pasa al siguiente
+    if (isSpeaking) playNextChunk();
+  };
+  
+  utterance.onerror = (e) => {
+    console.error("Error en la síntesis de voz", e);
+    // Intentar seguir con el siguiente fragmento si ocurre un error menor
+    if (e.error !== 'interrupted' && e.error !== 'canceled') {
+      if (isSpeaking) playNextChunk(); 
+    }
   };
 
-  window.speechSynthesis.speak(speechUtterance);
-  isSpeaking = true;
-  
-  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
-  lucide.createIcons();
-  showToast("Leyendo texto...");
+  // Guardar en variable global para evitar que el navegador elimine el proceso (Garbage Collection)
+  window.currentUtterance = utterance;
+  window.speechSynthesis.speak(utterance);
 }
 
 // --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
