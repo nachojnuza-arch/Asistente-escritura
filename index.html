@@ -625,8 +625,8 @@ let currentEditorText = "";
 
 // Variables para el lector de voz
 let isSpeaking = false;
-let currentUtterances = []; // Lista de fragmentos de texto
-window.currentUtterance = null; // Evita que el navegador elimine el audio de la memoria
+let currentUtterances = []; 
+let currentUtteranceObj = null; 
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -672,9 +672,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- LECTOR EN VOZ ALTA ---
 function toggleReadAloud() {
-  // Detener si ya está hablando o si el motor se quedó "trabado" en segundo plano
-  if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-    window.speechSynthesis.cancel();
+  // 1. Siempre limpiamos y detenemos al hacer clic
+  window.speechSynthesis.cancel();
+
+  if (isSpeaking) {
     isSpeaking = false;
     currentUtterances = [];
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
@@ -683,74 +684,41 @@ function toggleReadAloud() {
     return;
   }
 
+  // 2. Definir qué vamos a leer (La regla más simple y efectiva)
   let textToRead = "";
-  const selection = window.getSelection();
-  const selectedText = selection.toString().trim();
+  const selectedText = window.getSelection().toString().trim();
 
-  try {
-    // 1. Si el usuario pintó un texto de azul (selección manual)
-    if (selectedText.length > 0) {
-      textToRead = selectedText;
-      showToast("Leyendo selección...");
-    }
-    // 2. Si no hay selección, pero dejó el cursor titilando en algún lado
-    else if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      
-      // Verificamos si el cursor está realmente dentro de nuestro editor
-      if (textEditor.contains(range.commonAncestorContainer)) {
-        const rangeToEnd = document.createRange();
-        rangeToEnd.selectNodeContents(textEditor); 
-        rangeToEnd.setStart(range.startContainer, range.startOffset); 
-        textToRead = rangeToEnd.toString().trim();
-        
-        // Si justo hizo click en la última letra y no hay texto adelante, lee todo el documento
-        if (textToRead.length === 0) {
-            textToRead = textEditor.innerText.trim();
-            showToast("Leyendo todo el documento...");
-        } else {
-            showToast("Leyendo desde el cursor...");
-        }
-      } else {
-        // El cursor no estaba en el editor (capaz hizo click en la barra o se perdió el foco)
-        textToRead = textEditor.innerText.trim();
-        showToast("Leyendo todo el documento...");
-      }
-    } else {
-      // Respaldo total: no hay selección ni cursor válido
-      textToRead = textEditor.innerText.trim();
-      showToast("Leyendo todo el documento...");
-    }
-  } catch (err) {
-    console.warn("Error calculando el cursor, leyendo todo:", err);
+  if (selectedText.length > 0) {
+    // Si hay texto sombreado, leemos solo eso
+    textToRead = selectedText;
+    showToast("Leyendo selección...");
+  } else {
+    // Si no hay nada seleccionado, leemos todo desde el principio
     textToRead = textEditor.innerText.trim();
-    showToast("Leyendo todo el documento...");
+    showToast("Leyendo documento desde el inicio...");
   }
 
-  if (!textToRead || textToRead.length === 0) {
+  if (!textToRead) {
     showToast("No hay texto para leer.");
     return;
   }
 
-  // 3. Fragmentar el texto para evitar que colapse
+  // 3. Cortamos el texto en oraciones para que Chrome no se cuelgue a los 15 segundos
   const chunks = textToRead.match(/[^.!?\n]+[.!?\n]*/g) || [textToRead];
   currentUtterances = chunks.map(c => c.trim()).filter(c => c.length > 0);
-  
-  if (currentUtterances.length === 0) {
-    showToast("Error procesando texto.");
-    return;
-  }
 
+  if (currentUtterances.length === 0) return;
+
+  // 4. Cambiamos el icono y empezamos
   isSpeaking = true;
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
   lucide.createIcons();
-  
-  // Limpiamos cualquier voz "fantasma" trabada y empezamos tras un mínimo respiro
-  window.speechSynthesis.cancel();
-  setTimeout(playNextChunk, 50);
+
+  playNextChunk();
 }
 
 function playNextChunk() {
+  // Condición de parada cuando se acaban los pedazos de texto
   if (!isSpeaking || currentUtterances.length === 0) {
     isSpeaking = false;
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
@@ -758,32 +726,28 @@ function playNextChunk() {
     return;
   }
 
-  const text = currentUtterances.shift();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'es-ES';
+  const text = currentUtterances.shift(); // Toma la siguiente oración
+  currentUtteranceObj = new SpeechSynthesisUtterance(text);
+  currentUtteranceObj.lang = 'es-ES';
   
-  utterance.onend = () => {
-    // Pausa ligeramente más larga (150ms) para que el navegador no se ahogue al cambiar de frase
-    setTimeout(() => {
-      if (isSpeaking) playNextChunk();
-    }, 150);
-  };
-  
-  utterance.onerror = (e) => {
-    console.warn("Interrupción de voz:", e);
-    if (e.error !== 'interrupted' && e.error !== 'canceled') {
-      setTimeout(() => {
-        if (isSpeaking) playNextChunk(); 
-      }, 150);
-    } else {
-      isSpeaking = false;
-      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
-      lucide.createIcons();
+  // Cuando termina la oración actual, espera 100ms y llama a la siguiente
+  currentUtteranceObj.onend = () => {
+    if (isSpeaking) {
+      setTimeout(playNextChunk, 100);
     }
   };
 
-  window.currentUtterance = utterance; 
-  window.speechSynthesis.speak(utterance);
+  // Si hay un error, lo ignora y pasa a la siguiente oración
+  currentUtteranceObj.onerror = (e) => {
+    console.warn("TTS Error, saltando a la siguiente frase:", e);
+    if (isSpeaking) {
+      setTimeout(playNextChunk, 100);
+    }
+  };
+
+  // Forzamos el play y destrabamos el reproductor de Linux
+  window.speechSynthesis.speak(currentUtteranceObj);
+  window.speechSynthesis.resume(); 
 }
 
 // --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
