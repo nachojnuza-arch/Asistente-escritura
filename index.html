@@ -620,13 +620,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- VARIABLES GLOBALES DEL ESTADO ---
 let geminiApiKey = null;
 let supportedModelName = null;
-let conversationHistory = []; 
+let conversationHistory = []; // Solo para el chat conversacional
 let currentEditorText = "";
 
-// Variables para el lector de voz
+// Variables para el lector de voz (Simples y directas)
 let isSpeaking = false;
-let currentUtterances = []; 
 let currentUtteranceObj = null; 
+let resumeInterval = null; // Timer para evitar que Chrome se cuelgue a los 15s
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -656,46 +656,95 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeChatBtn = document.getElementById('close-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', () => document.body.classList.toggle('chat-visible'));
   if (closeChatBtn) closeChatBtn.addEventListener('click', () => document.body.classList.remove('chat-visible'));
-      // Atajos de Teclado
-      document.addEventListener('keydown', (event) => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        if (event.altKey) return;
-        switch (event.key.toLowerCase()) {
-          case 'b': event.preventDefault(); applyTextStyle('bold'); break;
-          case 'i': event.preventDefault(); applyTextStyle('italic'); break;
-          case 'u': event.preventDefault(); applyTextStyle('underline'); break;
-          case 'z': event.preventDefault(); document.execCommand('undo', false, null); break;
-          case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
-        }
-      });
+
+  // Manejador de Cambio de API KEY
+  const changeApiKeyBtn = document.getElementById('change-api-key-btn');
+  if (changeApiKeyBtn) {
+    changeApiKeyBtn.addEventListener('click', () => {
+      const currentKey = localStorage.getItem('gemini_api_key') || '';
+      const newKey = prompt('Introduce tu clave API de Google AI Studio:', currentKey);
+      if (newKey !== null && newKey.trim() !== '') {
+        localStorage.setItem('gemini_api_key', newKey.trim());
+        geminiApiKey = newKey.trim();
+        showToast('✅ API Key actualizada');
+      }
+    });
+  }
+
+  // Toolbar actions
+  const btn = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
+  
+  btn('undo-btn', () => { document.execCommand('undo', false, null); textEditor.focus(); });
+  btn('redo-btn', () => { document.execCommand('redo', false, null); textEditor.focus(); });
+  btn('bold-btn', () => applyTextStyle('bold'));
+  btn('italic-btn', () => applyTextStyle('italic'));
+  btn('underline-btn', () => applyTextStyle('underline'));
+  btn('align-left-btn', () => applyTextAlignment('justifyLeft'));
+  btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
+  btn('align-right-btn', () => applyTextAlignment('justifyRight'));
+
+  // Evitar pérdida de foco
+  document.querySelectorAll('#editor-toolbar button').forEach(el => {
+    el.addEventListener('mousedown', (event) => event.preventDefault());
+  });
+
+  document.getElementById('font-family-select')?.addEventListener('change', (e) => {
+    if (e.target.value) { applyTextFamily(e.target.value); textEditor.focus(); }
+  });
+  document.getElementById('font-color-picker')?.addEventListener('input', (e) => applyTextColor(e.target.value));
+  document.getElementById('font-size-select')?.addEventListener('change', (e) => {
+    if (e.target.value) { applyTextSize(e.target.value); textEditor.focus(); }
+  });
+
+  // Acciones principales AI
+  btn('check-errors-btn', handleSmartCorrection);
+  btn('check-style-btn', handleLiteraryAnalysis);
+  
+  btn('save-now-btn', () => saveContent(true));
+  btn('download-docx-btn', downloadAsDocx);
+
+  if (chatForm) chatForm.addEventListener('submit', handleChatMessage);
+
+  // Atajos de Teclado
+  document.addEventListener('keydown', (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    if (event.altKey) return;
+    switch (event.key.toLowerCase()) {
+      case 'b': event.preventDefault(); applyTextStyle('bold'); break;
+      case 'i': event.preventDefault(); applyTextStyle('italic'); break;
+      case 'u': event.preventDefault(); applyTextStyle('underline'); break;
+      case 'z': event.preventDefault(); document.execCommand('undo', false, null); break;
+      case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
+    }
+  });
+  
+  // Vincular botón de lectura
+  btn('read-aloud-btn', toggleReadAloud);
 });
 
-// --- LECTOR EN VOZ ALTA ---
+// --- LECTOR EN VOZ ALTA (VERSIÓN DEFINITIVA, SIMPLE Y ROBUSTA) ---
 function toggleReadAloud() {
-  // 1. Siempre limpiamos y detenemos al hacer clic
-  window.speechSynthesis.cancel();
-
-  if (isSpeaking) {
+  // 1. Si está leyendo o el motor se quedó colgado, detenemos y limpiamos todo.
+  if (isSpeaking || window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    clearInterval(resumeInterval);
     isSpeaking = false;
-    currentUtterances = [];
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
     showToast("Lectura detenida");
     return;
   }
 
-  // 2. Definir qué vamos a leer (La regla más simple y efectiva)
+  // 2. Determinar qué leemos (Selección vs Todo el documento)
   let textToRead = "";
   const selectedText = window.getSelection().toString().trim();
 
   if (selectedText.length > 0) {
-    // Si hay texto sombreado, leemos solo eso
     textToRead = selectedText;
     showToast("Leyendo selección...");
   } else {
-    // Si no hay nada seleccionado, leemos todo desde el principio
     textToRead = textEditor.innerText.trim();
-    showToast("Leyendo documento desde el inicio...");
+    showToast("Leyendo todo el documento...");
   }
 
   if (!textToRead) {
@@ -703,52 +752,59 @@ function toggleReadAloud() {
     return;
   }
 
-  // 3. Cortamos el texto en oraciones para que Chrome no se cuelgue a los 15 segundos
-  const chunks = textToRead.match(/[^.!?\n]+[.!?\n]*/g) || [textToRead];
-  currentUtterances = chunks.map(c => c.trim()).filter(c => c.length > 0);
-
-  if (currentUtterances.length === 0) return;
-
-  // 4. Cambiamos el icono y empezamos
-  isSpeaking = true;
-  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
-  lucide.createIcons();
-
-  playNextChunk();
-}
-
-function playNextChunk() {
-  // Condición de parada cuando se acaban los pedazos de texto
-  if (!isSpeaking || currentUtterances.length === 0) {
-    isSpeaking = false;
-    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
-    lucide.createIcons();
-    return;
-  }
-
-  const text = currentUtterances.shift(); // Toma la siguiente oración
-  currentUtteranceObj = new SpeechSynthesisUtterance(text);
-  currentUtteranceObj.lang = 'es-ES';
+  // 3. Limpieza profunda antes de empezar (necesario en Linux)
+  window.speechSynthesis.cancel();
   
-  // Cuando termina la oración actual, espera 100ms y llama a la siguiente
-  currentUtteranceObj.onend = () => {
-    if (isSpeaking) {
-      setTimeout(playNextChunk, 100);
+  // 4. El secreto para que Chrome no ignore la orden: un pequeñísimo delay después de cancel()
+  setTimeout(() => {
+    currentUtteranceObj = new SpeechSynthesisUtterance(textToRead);
+    currentUtteranceObj.lang = 'es-ES';
+    currentUtteranceObj.rate = 1.0;
+    currentUtteranceObj.volume = 1.0;
+    
+    // Asignar explícitamente una voz en español si existe (ayuda a Linux a no perderse)
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(v => v.lang.includes('es'));
+    if (spanishVoice) {
+      currentUtteranceObj.voice = spanishVoice;
     }
-  };
 
-  // Si hay un error, lo ignora y pasa a la siguiente oración
-  currentUtteranceObj.onerror = (e) => {
-    console.warn("TTS Error, saltando a la siguiente frase:", e);
-    if (isSpeaking) {
-      setTimeout(playNextChunk, 100);
-    }
-  };
+    currentUtteranceObj.onstart = () => {
+      isSpeaking = true;
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+      lucide.createIcons();
+      
+      // HACK ANTI-CUELGUE (15 SEGUNDOS):
+      // Le mandamos un "resume()" cada 10 segundos para que el motor crea que estamos activos,
+      // esto NO acciona el reproductor negro de tu captura de pantalla porque no usamos pause()
+      clearInterval(resumeInterval);
+      resumeInterval = setInterval(() => {
+         if (window.speechSynthesis.speaking) {
+             window.speechSynthesis.resume();
+         }
+      }, 10000);
+    };
 
-  // Forzamos el play y destrabamos el reproductor de Linux
-  window.speechSynthesis.speak(currentUtteranceObj);
-  window.speechSynthesis.resume(); 
+    currentUtteranceObj.onend = () => {
+      isSpeaking = false;
+      clearInterval(resumeInterval);
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
+    };
+
+    currentUtteranceObj.onerror = (e) => {
+      console.warn("Error o interrupción del TTS:", e);
+      isSpeaking = false;
+      clearInterval(resumeInterval);
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
+    };
+
+    // Reproducir el bloque completo
+    window.speechSynthesis.speak(currentUtteranceObj);
+  }, 100); 
 }
+
 
 // --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
 function getTargetText() {
@@ -813,16 +869,16 @@ ${target.text}
     }
 
     if (analysisData.comentario_general) {
-      addMessageToChat(`${analysisData.comentario_general}`, 'model');
+      addMessageToChat(`📝 ${analysisData.comentario_general}`, 'model');
     }
 
     if (analysisData.correcciones && analysisData.correcciones.length > 0) {
       applyAIHighlights(analysisData.correcciones);
       showToast(`${analysisData.correcciones.length} sugerencias aplicadas en el editor.`);
-      if(target.isSelection) addMessageToChat(`He subrayado sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
-      else addMessageToChat(`He subrayado sugerencias en todo el texto. Haz clic en ellas.`, 'system');
+      if(target.isSelection) addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
+      else addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en todo el texto. Haz clic en ellas.`, 'system');
     } else {
-      addMessageToChat("El texto que revisé está excelente. No veo necesidad de cambios gramaticales.", 'model');
+      addMessageToChat("¡El texto que revisé está excelente! No veo necesidad de cambios gramaticales.", 'model');
     }
 
   } catch (error) {
@@ -832,7 +888,7 @@ ${target.text}
   }
 }
 
-// --- FUNCIÓN 2: ANÁLISIS DE TEXTO / EJERCICIOS ---
+// --- FUNCIÓN 2: CRÍTICA LITERARIA ---
 async function handleLiteraryAnalysis() {
   const target = getTargetText();
   if (!target.text.trim()) {
@@ -1060,6 +1116,7 @@ async function getApiKey() {
   return null;
 }
 
+// Optimizamos para buscar siempre los modelos "flash" que son más rápidos y baratos en tokens
 async function findSupportedModel(apiKey) {
     if (supportedModelName) return supportedModelName;
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
@@ -1118,7 +1175,7 @@ function loadSavedText() {
     textEditor.innerHTML = savedContent;
   }
 }
-function startAutoSave() { setInterval(() => saveContent(false), 3000); } 
+function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
 
 function downloadAsDocx() {
   const content = textEditor.innerHTML;
