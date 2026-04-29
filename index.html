@@ -15,18 +15,20 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 
 <style>
-  /* --- ESTILOS BASE Y VARIABLES --- */
+  /* --- ESTILOS BASE Y VARIABLES (ACADÉMICO / MODERNO) --- */
   :root {
     --bg-main: #f1f5f9;      
     --bg-panel: #ffffff;     
-    --topbar-bg: #0f172a;    
+    --topbar-bg: #1f79df;    
     --border: #e2e8f0;       
     --text-main: #1e293b;    
     --text-muted: #64748b;   
     --accent: #2563eb;       
-    --accent-hover: #1d4ed8; 
-    --radius: 8px;
-    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --accent-hover: #0c9423; 
+    --radius: 8px;           /* Bordes más redondeados */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+    --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
+    --transition: 0.2s ease;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,9 +50,9 @@
     justify-content: space-between;
     background: var(--topbar-bg);
     color: white;
-    padding: 0.75rem 1.5rem;
+    padding: 0.6rem 1.5rem;
     flex-shrink: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-sm);
     z-index: 20;
     flex-wrap: wrap;
     gap: 10px;
@@ -59,37 +61,71 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-weight: 600;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
+    color: white;
   }
 
   .topbar-actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
+    align-items: center;
   }
 
   .tb-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.05);
-    color: white;
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #cbd5e1; /* Gris claro */
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius);
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 500;
     transition: all var(--transition);
   }
 
-  .tb-btn:hover { background: rgba(255,255,255,0.2); }
-  .tb-btn.primary { background: var(--accent); border-color: var(--accent); }
-  .tb-btn.primary:hover { background: var(--accent-hover); }
-  .tb-btn.secondary { background: #10b981; border-color: #10b981; } 
-  .tb-btn.secondary:hover { background: #059669; }
+  /* Resaltado al pasar el ratón */
+  .tb-btn:hover { 
+    background: rgba(255,255,255,0.15); 
+    color: white;
+  }
+  
+  .tb-btn.primary { 
+    background: var(--accent); 
+    color: white; 
+    border-color: var(--accent);
+  }
+  .tb-btn.primary:hover { 
+    background: var(--accent-hover); 
+  }
+  
+  .tb-btn.secondary { 
+    background: rgba(255,255,255,0.1); 
+    border: 1px solid rgba(255,255,255,0.2); 
+    color: white; 
+  } 
+  .tb-btn.secondary:hover { 
+    background: rgba(255,255,255,0.25); 
+  }
+
+  #ai-role-select {
+    background: white;
+    color: var(--text-main);
+    border: 1px solid transparent;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    box-shadow: var(--shadow-sm);
+  }
 
   /* --- ESTRUCTURA PRINCIPAL --- */
   #app {
@@ -111,28 +147,30 @@
     background: var(--bg-panel);
     display: flex;
     flex-direction: column;
-    transition: width var(--transition), opacity var(--transition);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
     opacity: 0;
     visibility: hidden;
     flex-shrink: 0;
-    box-shadow: 1px 0 10px rgba(0,0,0,0.05);
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 10px rgba(0,0,0,0.03);
     z-index: 10;
   }
 
   body.chat-visible #chat-container {
-    width: 40%;
+    width: 35%;
     opacity: 1;
     visibility: visible;
-    border-right: 1px solid var(--border);
   }
 
   .chat-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 1.25rem;
+    padding: 0.8rem 1.25rem;
     border-bottom: 1px solid var(--border);
     font-weight: 600;
+    font-size: 0.85rem;
+    background: #f8fafc;
   }
 
   .chat-close {
@@ -143,8 +181,9 @@
     display: flex;
     padding: 4px;
     border-radius: 4px;
+    transition: color var(--transition);
   }
-  .chat-close:hover { background: var(--bg-main); color: var(--text-main); }
+  .chat-close:hover { color: var(--text-main); background: #e2e8f0; }
 
   #chat-messages {
     flex: 1;
@@ -153,26 +192,28 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: #f8fafc;
+    background: var(--bg-panel);
   }
 
   .chat-message {
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-radius: var(--radius);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     line-height: 1.5;
     max-width: 90%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     white-space: pre-wrap;
+    box-shadow: var(--shadow-sm);
   }
 
   .chat-message.system {
-    background: var(--border);
-    color: var(--text-main);
+    background: #f1f5f9;
+    color: var(--text-muted);
     align-self: center;
     text-align: center;
     max-width: 100%;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    box-shadow: none;
   }
 
   .chat-message.user {
@@ -183,7 +224,7 @@
   }
 
   .chat-message.model {
-    background: white;
+    background: #f8fafc;
     color: var(--text-main);
     align-self: flex-start;
     border: 1px solid var(--border);
@@ -200,27 +241,33 @@
 
   #chat-input {
     flex: 1;
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: 20px;
     outline: none;
     font-family: inherit;
+    font-size: 0.85rem;
+    transition: border-color var(--transition);
   }
-  #chat-input:focus { border-color: var(--accent); }
+  #chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
 
   #chat-form button {
     background: var(--accent);
     color: white;
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: background var(--transition);
+    box-shadow: var(--shadow-sm);
   }
-  #chat-form button:hover { background: var(--accent-hover); }
+  #chat-form button:hover { 
+    background: var(--accent-hover); 
+  }
 
   /* --- EDITOR (DERECHA) --- */
   #editor-container {
@@ -233,20 +280,20 @@
 
   #editor-toolbar {
     background: var(--bg-panel);
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 1rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
     align-items: center;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     z-index: 5;
   }
 
   .toolbar-group {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     padding-right: 12px;
     border-right: 1px solid var(--border);
   }
@@ -255,25 +302,32 @@
   #editor-toolbar button, #editor-toolbar select, #editor-toolbar input[type="color"] {
     background: transparent;
     border: 1px solid transparent;
-    padding: 6px;
-    border-radius: 6px;
+    padding: 4px;
+    border-radius: 4px;
     cursor: pointer;
-    color: var(--text-main);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
-  #editor-toolbar select { border: 1px solid var(--border); padding: 4px 8px; }
-  #editor-toolbar input[type="color"] { padding: 2px; width: 30px; height: 30px; border: 1px solid var(--border); }
-  #editor-toolbar button:hover { background: var(--bg-main); }
+  #editor-toolbar select { border: 1px solid transparent; padding: 4px 6px; }
+  #editor-toolbar select:hover { border-color: var(--border); background: #f8fafc; }
+  #editor-toolbar input[type="color"] { padding: 0; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  #editor-toolbar input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  #editor-toolbar input[type="color"]::-webkit-color-swatch { border: none; }
+  
+  #editor-toolbar button:hover { 
+    background: #f1f5f9; 
+    color: var(--text-main);
+  }
 
   #page-counter {
     margin-left: auto;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     font-weight: 500;
   }
@@ -281,7 +335,7 @@
   #pages-container {
     flex: 1;
     overflow-y: auto;
-    padding: 2rem 1rem;
+    padding: 3rem 1rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -298,7 +352,9 @@
     white-space: pre-wrap; 
     overflow-wrap: break-word; 
     word-break: break-word;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0,0,0,0.03);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     margin-bottom: 4rem;
     padding: 80px 70px; 
     box-sizing: border-box;
@@ -307,57 +363,60 @@
     font-size: 11pt;
     line-height: 1.6;
     color: #000;
-    transition: width var(--transition), max-width var(--transition);
+    transition: box-shadow var(--transition), border-color var(--transition);
   }
 
   #text-editor:focus {
-    box-shadow: 0 0 0 2px var(--accent), 0 4px 15px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), var(--shadow-md);
+    border-color: #93c5fd;
   }
 
   #text-editor:empty::before {
-    content: 'Comienza a escribir o pega tu texto aquí...\n\n💡 Tip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
-    color: #94a3b8;
+    content: 'Comienza a escribir o pega tu texto aquí...\n\nTip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
+    color: #a1a1aa;
     pointer-events: none;
   }
 
   /* ESTILOS PARA LOS ERRORES IA */
   .ai-suggestion {
     border-bottom: 2px dashed #8b5cf6; 
-    background-color: rgba(139, 92, 246, 0.1);
+    background-color: rgba(139, 92, 246, 0.05);
     cursor: pointer;
     transition: background-color 0.2s;
   }
 
-  .ai-suggestion:hover { background-color: rgba(139, 92, 246, 0.2); }
+  .ai-suggestion:hover { background-color: rgba(139, 92, 246, 0.15); }
 
   /* CAJA DE SUGERENCIAS FLOTANTE */
   .suggestion-box {
     position: absolute;
     background: white;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
     z-index: 1000;
     overflow: hidden;
     min-width: 200px;
     max-width: 300px;
     font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .suggestion-box .sugg-header {
-    background: #f8fafc;
+    background: var(--bg-main);
     padding: 8px 12px;
-    border-bottom: 1px solid #e2e8f0;
-    font-weight: 500;
-    color: #475569;
-    font-size: 0.8rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .suggestion-box .sugg-item {
     padding: 10px 12px;
     cursor: pointer;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--bg-main);
     color: var(--accent);
     font-weight: 500;
     display: flex;
@@ -366,7 +425,7 @@
     transition: background 0.2s;
   }
   
-  .suggestion-box .sugg-item:hover { background: #f1f5f9; }
+  .suggestion-box .sugg-item:hover { background: #f8fafc; }
 
   @media (max-width: 768px) {
     #text-editor { padding: 40px 24px; }
@@ -378,9 +437,9 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(255,255,255,0.8);
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
+    background: rgba(255,255,255,0.7);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
     align-items: center;
     justify-content: center;
     flex-direction: column;
@@ -390,15 +449,15 @@
   #loading.show { display: flex; }
   
   .spinner {
-    width: 40px; height: 40px;
+    width: 32px; height: 32px;
     border: 3px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   
-  #loading p { font-weight: 500; color: var(--text-main); }
+  #loading p { font-size: 0.85rem; font-weight: 500; color: var(--text-main); }
 
   #toast {
     position: fixed;
@@ -407,11 +466,11 @@
     transform: translateX(-50%) translateY(100px);
     background: var(--topbar-bg);
     color: white;
-    padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.8rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: transform var(--transition);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 999;
     pointer-events: none;
   }
@@ -423,20 +482,40 @@
 <!-- TOPBAR -->
 <div id="topbar" role="banner">
   <div class="brand">
-    <i data-lucide="pen-tool"></i>
+    <i data-lucide="pen-tool" size="18"></i>
     Asistente de Escritura
   </div>
   <div class="topbar-actions">
-    <!-- NUEVO: Botón para cambiar API KEY -->
-    <button id="change-api-key-btn" class="tb-btn" title="Configurar API Key"><i data-lucide="key" size="16"></i> API Key</button>
-    <button id="save-now-btn" class="tb-btn" title="Guardar Progreso"><i data-lucide="save" size="16"></i> Guardar</button>
-    <button id="toggle-chat-btn" class="tb-btn" title="Abrir/Cerrar Chat IA"><i data-lucide="message-square" size="16"></i> Chat IA</button>
     
+    <!-- Selector de Rol IA -->
+    <select id="ai-role-select" title="Selecciona el rol de la IA">
+      <option value="literario">Asistente Literario</option>
+      <option value="profesor">Profesor Universitario</option>
+    </select>
+
+    <button id="change-api-key-btn" class="tb-btn" title="Configurar API Key">
+      <i data-lucide="key" size="14"></i> API Key
+    </button>
+    <button id="save-now-btn" class="tb-btn" title="Guardar Progreso">
+      <i data-lucide="save" size="14"></i> Guardar
+    </button>
+    <button id="toggle-chat-btn" class="tb-btn" title="Abrir/Cerrar Chat IA">
+      <i data-lucide="message-square" size="14"></i> Chat
+    </button>
+    
+    <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+
     <!-- BOTONES IA -->
-    <button id="check-errors-btn" class="tb-btn primary" title="Subrayar errores en selección o documento"><i data-lucide="check-circle" size="16"></i> Corregir</button>
-    <button id="check-style-btn" class="tb-btn secondary" title="Recibir crítica literaria en el chat"><i data-lucide="sparkles" size="16"></i> Asistente</button>
+    <button id="check-errors-btn" class="tb-btn primary" title="Subrayar errores en selección o documento">
+      <i data-lucide="check-circle" size="14"></i> Corregir
+    </button>
+    <button id="check-style-btn" class="tb-btn secondary" title="Analizar el texto según el rol seleccionado">
+      <i data-lucide="sparkles" size="14"></i> Analizar
+    </button>
     
-    <button id="download-docx-btn" class="tb-btn" title="Descargar Documento"><i data-lucide="download" size="16"></i> Descargar</button>
+    <button id="download-docx-btn" class="tb-btn" title="Descargar Documento">
+      <i data-lucide="download" size="14"></i> Descargar
+    </button>
   </div>
 </div>
 
@@ -448,18 +527,18 @@
     <div id="chat-container">
       <div class="chat-header">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="bot" size="18" style="color: var(--accent)"></i> Asistente IA
+          <i data-lucide="bot" size="16"></i> Asistente IA
         </div>
-        <button id="close-chat-btn" class="chat-close" aria-label="Cerrar chat"><i data-lucide="x" size="18"></i></button>
+        <button id="close-chat-btn" class="chat-close" aria-label="Cerrar chat"><i data-lucide="x" size="16"></i></button>
       </div>
       <div id="chat-messages">
         <div class="chat-message system">
-          ¡Hola! <br><br>Para no gastar tu cuota gratuita de IA rápidamente, te recomiendo <b>seleccionar con el ratón el párrafo</b> que quieres revisar y luego presionar "Corregir" o "Asistente". <br><br>💡 La ortografía tradicional ahora la maneja tu navegador automáticamente de forma local.
+          Bienvenido.<br><br>Selecciona tu modo en la barra superior (Literario o Profesor).<br><br>Te recomiendo seleccionar con el ratón el párrafo que quieres revisar y luego presionar "Corregir" o "Analizar".
         </div>
       </div>
       <form id="chat-form">
-        <input type="text" id="chat-input" placeholder="Pregúntale algo a tu asistente..." autocomplete="off">
-        <button type="submit" aria-label="Enviar mensaje"><i data-lucide="send" size="16"></i></button>
+        <input type="text" id="chat-input" placeholder="Pregúntale algo al asistente..." autocomplete="off">
+        <button type="submit" aria-label="Enviar mensaje"><i data-lucide="send" size="14"></i></button>
       </form>
     </div>
 
@@ -467,20 +546,20 @@
     <div id="editor-container">
       <div id="editor-toolbar">
         <div class="toolbar-group">
-          <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="16"></i></button>
-          <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="16"></i></button>
+          <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="14"></i></button>
+          <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="14"></i></button>
         </div>
 
         <div class="toolbar-group">
-          <button type="button" id="bold-btn" title="Negrita"><i data-lucide="bold" size="16"></i></button>
-          <button type="button" id="italic-btn" title="Cursiva"><i data-lucide="italic" size="16"></i></button>
-          <button type="button" id="underline-btn" title="Subrayado"><i data-lucide="underline" size="16"></i></button>
+          <button type="button" id="bold-btn" title="Negrita"><i data-lucide="bold" size="14"></i></button>
+          <button type="button" id="italic-btn" title="Cursiva"><i data-lucide="italic" size="14"></i></button>
+          <button type="button" id="underline-btn" title="Subrayado"><i data-lucide="underline" size="14"></i></button>
         </div>
 
         <div class="toolbar-group">
-          <button type="button" id="align-left-btn" title="Alinear a la izquierda"><i data-lucide="align-left" size="16"></i></button>
-          <button type="button" id="align-center-btn" title="Centrar texto"><i data-lucide="align-center" size="16"></i></button>
-          <button type="button" id="align-right-btn" title="Alinear a la derecha"><i data-lucide="align-right" size="16"></i></button>
+          <button type="button" id="align-left-btn" title="Alinear a la izquierda"><i data-lucide="align-left" size="14"></i></button>
+          <button type="button" id="align-center-btn" title="Centrar texto"><i data-lucide="align-center" size="14"></i></button>
+          <button type="button" id="align-right-btn" title="Alinear a la derecha"><i data-lucide="align-right" size="14"></i></button>
         </div>
 
         <div class="toolbar-group">
@@ -498,6 +577,11 @@
             <option value="20px">20</option>
             <option value="24px">24</option>
           </select>
+        </div>
+
+        <!-- Grupo de lectura en voz alta -->
+        <div class="toolbar-group">
+          <button type="button" id="read-aloud-btn" title="Leer en voz alta (Reproducir/Pausar)"><i data-lucide="volume-2" size="14"></i></button>
         </div>
 
         <span id="page-counter" aria-live="polite">Aprox. 1 página(s)</span>
@@ -535,8 +619,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- VARIABLES GLOBALES DEL ESTADO ---
 let geminiApiKey = null;
 let supportedModelName = null;
-let conversationHistory = []; // Solo para el chat conversacional
+let conversationHistory = []; 
 let currentEditorText = "";
+
+// Variables para el lector de voz
+let isSpeaking = false;
+let speechUtterance = new SpeechSynthesisUtterance();
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -576,7 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (newKey !== null && newKey.trim() !== '') {
         localStorage.setItem('gemini_api_key', newKey.trim());
         geminiApiKey = newKey.trim();
-        showToast('✅ API Key actualizada');
+        showToast('API Key actualizada');
       }
     });
   }
@@ -592,6 +680,9 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('align-left-btn', () => applyTextAlignment('justifyLeft'));
   btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
   btn('align-right-btn', () => applyTextAlignment('justifyRight'));
+  
+  // Vincular botón de leer en voz alta
+  btn('read-aloud-btn', toggleReadAloud);
 
   // Evitar pérdida de foco
   document.querySelectorAll('#editor-toolbar button').forEach(el => {
@@ -628,6 +719,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// --- LECTOR EN VOZ ALTA ---
+function toggleReadAloud() {
+  if (isSpeaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+    lucide.createIcons();
+    showToast("Lectura detenida");
+    return;
+  }
+
+  const target = getTargetText();
+  const textToRead = target.text;
+
+  if (!textToRead.trim()) {
+    showToast("No hay texto para leer.");
+    return;
+  }
+
+  speechUtterance.text = textToRead;
+  speechUtterance.lang = 'es-ES'; // Configurado para español
+
+  speechUtterance.onend = () => {
+    isSpeaking = false;
+    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+    lucide.createIcons();
+  };
+
+  window.speechSynthesis.speak(speechUtterance);
+  isSpeaking = true;
+  
+  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+  lucide.createIcons();
+  showToast("Leyendo texto...");
+}
 
 // --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
 function getTargetText() {
@@ -692,16 +819,16 @@ ${target.text}
     }
 
     if (analysisData.comentario_general) {
-      addMessageToChat(`📝 ${analysisData.comentario_general}`, 'model');
+      addMessageToChat(`${analysisData.comentario_general}`, 'model');
     }
 
     if (analysisData.correcciones && analysisData.correcciones.length > 0) {
       applyAIHighlights(analysisData.correcciones);
       showToast(`${analysisData.correcciones.length} sugerencias aplicadas en el editor.`);
-      if(target.isSelection) addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
-      else addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en todo el texto. Haz clic en ellas.`, 'system');
+      if(target.isSelection) addMessageToChat(`He subrayado sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
+      else addMessageToChat(`He subrayado sugerencias en todo el texto. Haz clic en ellas.`, 'system');
     } else {
-      addMessageToChat("¡El texto que revisé está excelente! No veo necesidad de cambios gramaticales.", 'model');
+      addMessageToChat("El texto que revisé está excelente. No veo necesidad de cambios gramaticales.", 'model');
     }
 
   } catch (error) {
@@ -711,7 +838,7 @@ ${target.text}
   }
 }
 
-// --- FUNCIÓN 2: CRÍTICA LITERARIA (Con rol Argentino) ---
+// --- FUNCIÓN 2: ANÁLISIS DE TEXTO / EJERCICIOS ---
 async function handleLiteraryAnalysis() {
   const target = getTargetText();
   if (!target.text.trim()) {
@@ -721,37 +848,36 @@ async function handleLiteraryAnalysis() {
 
   document.body.classList.add('chat-visible');
 
-  // PROMPT ACTUALIZADO CON ROL Y CHISTES
-  const personaPrompt = `Reglas de formato: No uses markdown. Separá párrafos con una línea en blanco.
-Usá exactamente esta estructura:
+  const selectedRole = document.getElementById('ai-role-select').value;
+  let personaPrompt = "";
 
-Chequeo General, che viejo:
-...
-
-Crítica constructiva:
-Objetiva de Estilo, Gramática y redaccion en un pequeño resumen inicial:
-...
-
-Sugerencias de Estilo: ideas y conceptos literarios para mejorar el texto, sin reescribirlo:
-...
-
-Tu Turno, Pelado:
-...
-
-Rol: Sos un crítico literario. Podés usar expresiones como 'che viejo' o 'pelado' con moderación. Nunca ataques a la persona, solo chistes sobre pelados al estilo de tobogán de piojos, dirigidos solo al texto.
-Tarea: Analizá el texto. Marcá errores gramaticales y de redacción, explica cómo corregirlos y da sugerencias concretas de mejora.
-
-Texto a analizar ${target.isSelection ? "(Fragmento)" : "(Completo)"}:
----
-${target.text}
----`;
+  if (selectedRole === 'literario') {
+    personaPrompt = `Actúa como un Asistente Literario divertido, irónico pero muy amable.
+    Reglas de formato: No uses markdown. Separa párrafos con una línea en blanco.
+    Analiza el texto, marca errores gramaticales o de redacción, explica cómo corregirlos y da sugerencias concretas de estilo y narrativa para mejorar la estructura.
+    IMPORTANTE: Siempre incluye algún chiste sutil y amigable sobre "pelados" (calvos) en tu crítica, como un guiño de humor recurrente, pero mantén la ayuda literaria útil y enfocada.
+    
+    Texto a analizar ${target.isSelection ? "(Fragmento)" : "(Completo)"}:
+    ---
+    ${target.text}
+    ---`;
+  } else {
+    personaPrompt = `Actúa como un Docente Universitario experto en Bioquímica y Medicina.
+    Reglas de formato: No uses markdown. Separa párrafos con una línea en blanco.
+    Analiza el siguiente texto o ejercicio. Detecta errores conceptuales, explica la resolución paso a paso con rigor científico, didáctica clara y nivel universitario.
+    
+    Texto o ejercicio a analizar ${target.isSelection ? "(Fragmento)" : "(Completo)"}:
+    ---
+    ${target.text}
+    ---`;
+  }
 
   conversationHistory.push({ role: 'user', parts: [{ text: personaPrompt }] });
   
   const apiKey = await getApiKey();
   if (!apiKey) return;
 
-  showLoading("Que Mira Bobo, leyendo...");
+  showLoading("Analizando contenido...");
   
   try {
     let result = await callGoogleAI(conversationHistory, apiKey);
@@ -796,7 +922,8 @@ function showAISuggestions(el) {
   box.innerHTML = `
     <div class="sugg-header">${exp || 'Sugerencia de mejora'}</div>
     <div class="sugg-item" title="Aplicar reemplazo">
-      ✨ <strong>${sug}</strong>
+      <span style="color: var(--text-muted); font-size: 12px; margin-right: 4px;">Reemplazar por:</span> 
+      <strong>${sug}</strong>
     </div>
   `;
   
@@ -833,8 +960,12 @@ async function handleChatMessage(e) {
   }
 
   if (conversationHistory.length === 0) {
-    // Al iniciar el chat libre, le inyectamos la misma personalidad humorística
-    conversationHistory = [{ role: 'user', parts: [{ text: "Actúa como un asistente literario argentino, honesto y directo, usa expresiones como 'che viejo' o 'pelado', y responde a: " + userMessage }] }];
+    const selectedRole = document.getElementById('ai-role-select').value;
+    let rolePrompt = selectedRole === 'literario' 
+      ? "Actúa como un asistente literario divertido, irónico y amable. Haz siempre algún chiste simpático sobre pelados (calvos). Responde a: "
+      : "Actúa como un profesor universitario riguroso y didáctico, experto en Bioquímica y Medicina. Responde a: ";
+    
+    conversationHistory = [{ role: 'user', parts: [{ text: rolePrompt + userMessage }] }];
   } else {
     conversationHistory.push({ role: 'user', parts: [{ text: userMessage }] });
   }
@@ -844,7 +975,7 @@ async function handleChatMessage(e) {
   const apiKey = await getApiKey();
   if (!apiKey) return;
   
-  showLoading("Bocha lista, ideas en camino...");
+  showLoading("Procesando...");
   try {
     let result = await callGoogleAI(conversationHistory, apiKey);
     result = result.replace(/[*#_]/g, ''); 
@@ -935,7 +1066,6 @@ async function getApiKey() {
   return null;
 }
 
-// Optimizamos para buscar siempre los modelos "flash" que son más rápidos y baratos en tokens
 async function findSupportedModel(apiKey) {
     if (supportedModelName) return supportedModelName;
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
@@ -994,7 +1124,7 @@ function loadSavedText() {
     textEditor.innerHTML = savedContent;
   }
 }
-function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
+function startAutoSave() { setInterval(() => saveContent(false), 3000); } 
 
 function downloadAsDocx() {
   const content = textEditor.innerHTML;
