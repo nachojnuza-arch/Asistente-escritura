@@ -1299,47 +1299,26 @@ function applyTextSize(sizeValue) {
 
 // --- IA / API FETCH ---
 async function getApiKey() {
-  if (geminiApiKey) return geminiApiKey;
+  if (geminiApiKey !== null) return geminiApiKey;
   const savedKey = localStorage.getItem('gemini_api_key');
   if (savedKey) { geminiApiKey = savedKey; return savedKey; }
-  const userKey = prompt('Por favor, introduce tu API Key de Google AI Studio:', '');
-  if (userKey && userKey.trim() !== '') {
-    localStorage.setItem('gemini_api_key', userKey);
-    geminiApiKey = userKey;
-    showToast('API Key guardada');
-    return userKey;
+  const userKey = prompt('Por favor, introduce tu API Key de Google AI Studio (deja en blanco si pruebas aquí en la plataforma):', '');
+  if (userKey !== null) {
+    localStorage.setItem('gemini_api_key', userKey.trim());
+    geminiApiKey = userKey.trim();
+    if (geminiApiKey !== '') showToast('API Key guardada');
+    return geminiApiKey;
   }
   showToast('API Key necesaria para la IA.');
   return null;
 }
 
-// Optimizamos para buscar siempre los modelos "flash" que son más rápidos y baratos en tokens
-async function findSupportedModel(apiKey) {
-    if (supportedModelName) return supportedModelName;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("No se pudo obtener modelos.");
-      const data = await response.json();
-      
-      const bestModel = data.models.find(m => m.name.includes('gemini-2.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
-                        data.models.find(m => m.name.includes('gemini-1.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
-                        data.models.find(m => m.name.includes('gemini') && m.supportedGenerationMethods?.includes('generateContent'));
-      
-      if (bestModel) { 
-        supportedModelName = bestModel.name; 
-        return supportedModelName; 
-      }
-      throw new Error('Sin modelo compatible.');
-    } catch(e) {
-       console.error("Fallo al contactar API:", e);
-       throw e;
-    }
-}
-
 async function callGoogleAI(history, apiKey) {
-  const modelToUse = await findSupportedModel(apiKey);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${modelToUse}:generateContent?key=${apiKey}`;
+  // Eliminamos la búsqueda de modelos (findSupportedModel) porque causaba bloqueos al pedir la lista a la API.
+  // Apuntamos a gemini-1.5-flash, que es el modelo que ofrece la mayor cantidad de requests en el plan gratuito.
+  const modelToUse = 'gemini-1.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+  
   const response = await fetch(url, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: history })
   });
