@@ -1314,9 +1314,9 @@ async function getApiKey() {
 }
 
 async function callGoogleAI(history, apiKey) {
-  // Eliminamos la búsqueda de modelos (findSupportedModel) porque causaba bloqueos al pedir la lista a la API.
-  // Apuntamos a gemini-1.5-flash, que es el modelo que ofrece la mayor cantidad de requests en el plan gratuito.
-  const modelToUse = 'gemini-1.5-flash';
+  // Usaremos 'gemini-2.5-flash-preview-09-2025' que es la versión más actual, rápida,
+  // con amplio límite en el plan gratuito y 100% compatible con este entorno.
+  const modelToUse = 'gemini-2.5-flash-preview-09-2025';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
   
   const response = await fetch(url, {
