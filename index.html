@@ -337,15 +337,6 @@
     100% { transform: scale(1); }
   }
 
-  /* Estilo para el texto mientras se escucha (aún no final) */
-  .interim-text {
-    color: #94a3b8;
-    background-color: transparent;
-    border-bottom: 1px dashed #cbd5e1;
-    pointer-events: none;
-    font-style: italic;
-  }
-
   #page-counter {
     margin-left: auto;
     font-size: 0.75rem;
@@ -748,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('read-aloud-btn', toggleReadAloud);
 });
 
-// --- MÓDULO DE DICTADO DE VOZ CON ESCRITURA EN VIVO Y AUTO-PUNTUACIÓN ---
+// --- MÓDULO DE DICTADO DE VOZ CON ESCRITURA EN VIVO (CORREGIDO) ---
 function initDictationModule() {
   const dictationBtn = document.getElementById('dictation-btn');
   if (!dictationBtn) return;
@@ -764,7 +755,7 @@ function initDictationModule() {
   let recognition = new SpeechRecognition();
   let isRecording = false;
   let interimSpan = null; 
-  let dictationPauseTimer = null; // Temporizador para la auto-puntuación
+  let dictationPauseTimer = null;
 
   recognition.continuous = true; 
   recognition.interimResults = true; 
@@ -788,48 +779,41 @@ function initDictationModule() {
       }
     }
 
-    // 1. Mostrar texto interino (en vivo)
-    if (interimTranscript) {
-      if (!interimSpan) {
-        const uniqueId = 'interim-span-' + Date.now();
-        textEditor.focus();
-        document.execCommand('insertHTML', false, `<span id="${uniqueId}" class="interim-text"></span>`);
-        interimSpan = document.getElementById(uniqueId);
-      }
-      if (interimSpan) {
-        interimSpan.textContent = interimTranscript + "...";
-      }
-    }
+    // Detener temporizador de auto-puntuación mientras hablamos
+    clearTimeout(dictationPauseTimer);
 
-    // 2. Procesar texto finalizado
-    if (finalTranscript) {
-      if (interimSpan) {
+    textEditor.focus();
+
+    // 1. ELIMINACIÓN SEGURA DEL TEXTO EN VIVO: 
+    // Lo borramos usando el DOM para garantizar que no se quede pegado y nos duplique el texto
+    if (interimSpan) {
+      if (interimSpan.parentNode) {
+        // Restaurar cursor exactamente a donde estaba antes del span gris
         const sel = window.getSelection();
         const range = document.createRange();
-        range.selectNode(interimSpan);
+        range.setStartBefore(interimSpan);
+        range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
-        document.execCommand('delete'); 
-        interimSpan = null;
+        
+        // Eliminar el nodo de forma segura
+        interimSpan.remove();
       }
+      interimSpan = null;
+    }
 
-      // Reiniciamos el temporizador de pausas cada vez que recibe un texto final
-      clearTimeout(dictationPauseTimer);
-
+    // 2. TEXTO FINAL: Se inserta formalmente
+    if (finalTranscript) {
       let formattedText = formatDictationTranscript(finalTranscript);
-      
-      textEditor.focus();
       document.execCommand('insertText', false, formattedText);
       
       updatePageCounter();
       saveContent(false);
 
-      // AUTO-PUNTUACIÓN POR PAUSAS
-      // Si el usuario deja de hablar por 2 segundos, y no hay ya un signo, añadimos un punto.
+      // AUTO-PUNTUACIÓN POR PAUSAS (2 SEGUNDOS DE SILENCIO = PUNTO Y SEGUIDO)
       dictationPauseTimer = setTimeout(() => {
         if (isRecording) {
           const currentText = textEditor.innerText.trim();
-          // Comprobamos que el texto no esté vacío y no termine ya en un signo de puntuación
           if (currentText.length > 0 && !/[.,;:?!]$/.test(currentText)) {
             textEditor.focus();
             document.execCommand('insertText', false, '. ');
@@ -837,6 +821,30 @@ function initDictationModule() {
           }
         }
       }, 2000);
+    }
+
+    // 3. NUEVO TEXTO EN VIVO: Se inserta y se le obliga a tener estilos en línea
+    if (interimTranscript) {
+      interimSpan = document.createElement('span');
+      // Aseguramos estilos en línea por si el editor contenteditable los borra
+      interimSpan.style.color = '#94a3b8';
+      interimSpan.style.fontStyle = 'italic';
+      interimSpan.style.borderBottom = '1px dashed #cbd5e1';
+      interimSpan.style.pointerEvents = 'none';
+      interimSpan.textContent = interimTranscript + "...";
+      
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.insertNode(interimSpan);
+        
+        // Mover cursor a la derecha del span para que parezca que avanza
+        const newRange = document.createRange();
+        newRange.setStartAfter(interimSpan);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
     }
   };
 
@@ -850,7 +858,7 @@ function initDictationModule() {
 
   recognition.onend = () => {
     clearTimeout(dictationPauseTimer);
-    if (interimSpan) {
+    if (interimSpan && interimSpan.parentNode) {
       interimSpan.remove();
       interimSpan = null;
     }
@@ -869,7 +877,7 @@ function initDictationModule() {
     dictationBtn.classList.remove('recording');
     showToast("Dictado por voz pausado.");
     
-    if (interimSpan) {
+    if (interimSpan && interimSpan.parentNode) {
       interimSpan.remove();
       interimSpan = null;
     }
