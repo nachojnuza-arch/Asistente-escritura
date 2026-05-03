@@ -8,7 +8,8 @@
 <!-- Enlaces PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f172a">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Librería de Iconos Modernos -->
@@ -19,12 +20,12 @@
   :root {
     --bg-main: #f1f5f9;      
     --bg-panel: #ffffff;     
-    --topbar-bg: #1f79df;    
+    --topbar-bg: #0f172a;    
     --border: #e2e8f0;       
     --text-main: #1e293b;    
     --text-muted: #64748b;   
     --accent: #2563eb;       
-    --accent-hover: #0c9423; 
+    --accent-hover: #1d4ed8; 
     --radius: 8px;           /* Bordes más redondeados */
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
     --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
@@ -325,6 +326,17 @@
     color: var(--text-main);
   }
 
+  /* --- ESTILOS DICTADO DE VOZ --- */
+  .recording {
+    color: #ef4444 !important; /* Rojo al grabar */
+    animation: pulse-recording 1.5s infinite;
+  }
+  @keyframes pulse-recording {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
   #page-counter {
     margin-left: auto;
     font-size: 0.75rem;
@@ -372,7 +384,7 @@
   }
 
   #text-editor:empty::before {
-    content: 'Comienza a escribir o pega tu texto aquí...\n\nTip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
+    content: 'Comienza a escribir, dicta por voz o pega tu texto aquí...\n\nTip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
     color: #a1a1aa;
     pointer-events: none;
   }
@@ -579,9 +591,12 @@
           </select>
         </div>
 
-        <!-- Grupo de lectura en voz alta -->
+        <!-- Grupo de Voz y Sonido -->
         <div class="toolbar-group">
+          <!-- Botón de lectura existente -->
           <button type="button" id="read-aloud-btn" title="Leer en voz alta (Reproducir/Pausar)"><i data-lucide="volume-2" size="14"></i></button>
+          <!-- NUEVO BOTÓN: Dictado por Voz -->
+          <button type="button" id="dictation-btn" title="Dictado por voz (Activar/Desactivar)"><i data-lucide="mic" size="14"></i></button>
         </div>
 
         <span id="page-counter" aria-live="polite">Aprox. 1 página(s)</span>
@@ -619,12 +634,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- VARIABLES GLOBALES DEL ESTADO ---
 let geminiApiKey = null;
 let supportedModelName = null;
-let conversationHistory = []; 
+let conversationHistory = []; // Solo para el chat conversacional
 let currentEditorText = "";
 
-// Variables para el lector de voz
+// Variables para el lector de voz (Simples y directas)
 let isSpeaking = false;
-let speechUtterance = new SpeechSynthesisUtterance();
+let currentUtteranceObj = null; 
+let resumeInterval = null; // Timer para evitar que Chrome se cuelgue a los 15s
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -639,6 +655,9 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedText();
   updatePageCounter();
   startAutoSave();
+
+  // Inicializar Módulo de Dictado
+  initDictationModule();
 
   textEditor.addEventListener('input', updatePageCounter);
 
@@ -664,7 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (newKey !== null && newKey.trim() !== '') {
         localStorage.setItem('gemini_api_key', newKey.trim());
         geminiApiKey = newKey.trim();
-        showToast('API Key actualizada');
+        showToast('✅ API Key actualizada');
       }
     });
   }
@@ -680,9 +699,6 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('align-left-btn', () => applyTextAlignment('justifyLeft'));
   btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
   btn('align-right-btn', () => applyTextAlignment('justifyRight'));
-  
-  // Vincular botón de leer en voz alta
-  btn('read-aloud-btn', toggleReadAloud);
 
   // Evitar pérdida de foco
   document.querySelectorAll('#editor-toolbar button').forEach(el => {
@@ -718,12 +734,110 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'y': event.preventDefault(); document.execCommand('redo', false, null); break;
     }
   });
+  
+  // Vincular botón de lectura
+  btn('read-aloud-btn', toggleReadAloud);
 });
+
+// --- MÓDULO DE DICTADO DE VOZ ---
+function initDictationModule() {
+  const dictationBtn = document.getElementById('dictation-btn');
+  if (!dictationBtn) return;
+
+  // Verificamos compatibilidad nativa (Chrome, Edge, Safari, algunos Firefox)
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (!SpeechRecognition) {
+    dictationBtn.style.display = 'none'; // Lo ocultamos si el navegador no lo soporta
+    console.warn("API de dictado por voz no soportada en este navegador.");
+    return;
+  }
+
+  let recognition = new SpeechRecognition();
+  let isRecording = false;
+
+  recognition.continuous = true; // Sigue escuchando aunque hagas pausas
+  recognition.interimResults = false; // Solo procesa resultados finales para evitar borrar texto accidentalmente
+  recognition.lang = 'es-ES'; // Idioma por defecto
+
+  recognition.onstart = () => {
+    isRecording = true;
+    dictationBtn.classList.add('recording');
+    showToast("Micrófono activado. Habla ahora...");
+  };
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        transcript += event.results[i][0].transcript + " ";
+      }
+    }
+    
+    if (transcript.trim() !== "") {
+      // Nos aseguramos de que el editor tenga foco antes de insertar
+      textEditor.focus();
+      
+      // Usamos execCommand 'insertText' para que el texto se inserte donde está el cursor
+      // y además respete la función de deshacer (Ctrl+Z) del propio editor.
+      document.execCommand('insertText', false, transcript);
+      
+      updatePageCounter();
+      saveContent(false);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    console.error("Error en dictado:", event.error);
+    if (event.error !== 'no-speech') {
+      showToast("Error de micrófono: " + event.error);
+      stopDictation();
+    }
+  };
+
+  recognition.onend = () => {
+    // Si isRecording sigue siendo true, significa que Chrome detuvo el motor por silencio,
+    // así que lo reiniciamos para que la grabación sea "continua" real.
+    if (isRecording) {
+      try {
+        recognition.start();
+      } catch (e) {
+        stopDictation();
+      }
+    } else {
+      stopDictation();
+    }
+  };
+
+  function stopDictation() {
+    isRecording = false;
+    try { recognition.stop(); } catch(e) {}
+    dictationBtn.classList.remove('recording');
+    showToast("Dictado por voz pausado.");
+  }
+
+  dictationBtn.addEventListener('click', () => {
+    if (isRecording) {
+      // Si ya está grabando, forzamos detenerlo
+      isRecording = false; 
+      stopDictation();
+    } else {
+      try {
+        recognition.start();
+      } catch(e) {
+        console.error("Error al iniciar micrófono:", e);
+        showToast("Por favor otorga permisos de micrófono al navegador.");
+      }
+    }
+  });
+}
+// --- FIN DEL MÓDULO DE DICTADO DE VOZ ---
 
 // --- LECTOR EN VOZ ALTA ---
 function toggleReadAloud() {
-  if (isSpeaking) {
+  if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
+    clearInterval(resumeInterval);
     isSpeaking = false;
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
@@ -731,32 +845,69 @@ function toggleReadAloud() {
     return;
   }
 
-  const target = getTargetText();
-  const textToRead = target.text;
+  let textToRead = "";
+  const selectedText = window.getSelection().toString().trim();
 
-  if (!textToRead.trim()) {
+  if (selectedText.length > 0) {
+    textToRead = selectedText;
+    showToast("Leyendo selección...");
+  } else {
+    textToRead = textEditor.innerText.trim();
+    showToast("Leyendo todo el documento...");
+  }
+
+  if (!textToRead) {
     showToast("No hay texto para leer.");
     return;
   }
 
-  speechUtterance.text = textToRead;
-  speechUtterance.lang = 'es-ES'; // Configurado para español
-
-  speechUtterance.onend = () => {
-    isSpeaking = false;
-    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
-    lucide.createIcons();
-  };
-
-  window.speechSynthesis.speak(speechUtterance);
-  isSpeaking = true;
+  window.speechSynthesis.cancel();
   
-  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
-  lucide.createIcons();
-  showToast("Leyendo texto...");
+  setTimeout(() => {
+    currentUtteranceObj = new SpeechSynthesisUtterance(textToRead);
+    currentUtteranceObj.lang = 'es-ES';
+    currentUtteranceObj.rate = 1.0;
+    currentUtteranceObj.volume = 1.0;
+    
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(v => v.lang.includes('es'));
+    if (spanishVoice) {
+      currentUtteranceObj.voice = spanishVoice;
+    }
+
+    currentUtteranceObj.onstart = () => {
+      isSpeaking = true;
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+      lucide.createIcons();
+      
+      clearInterval(resumeInterval);
+      resumeInterval = setInterval(() => {
+         if (window.speechSynthesis.speaking) {
+             window.speechSynthesis.resume();
+         }
+      }, 10000);
+    };
+
+    currentUtteranceObj.onend = () => {
+      isSpeaking = false;
+      clearInterval(resumeInterval);
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
+    };
+
+    currentUtteranceObj.onerror = (e) => {
+      console.warn("Error o interrupción del TTS:", e);
+      isSpeaking = false;
+      clearInterval(resumeInterval);
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
+    };
+
+    window.speechSynthesis.speak(currentUtteranceObj);
+  }, 100); 
 }
 
-// --- OBTENER TEXTO A ANALIZAR (OPTIMIZACIÓN DE TOKENS) ---
+// --- OBTENER TEXTO A ANALIZAR ---
 function getTargetText() {
   const selection = window.getSelection();
   const selectedText = selection.toString().trim();
@@ -819,16 +970,16 @@ ${target.text}
     }
 
     if (analysisData.comentario_general) {
-      addMessageToChat(`${analysisData.comentario_general}`, 'model');
+      addMessageToChat(`📝 ${analysisData.comentario_general}`, 'model');
     }
 
     if (analysisData.correcciones && analysisData.correcciones.length > 0) {
       applyAIHighlights(analysisData.correcciones);
       showToast(`${analysisData.correcciones.length} sugerencias aplicadas en el editor.`);
-      if(target.isSelection) addMessageToChat(`He subrayado sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
-      else addMessageToChat(`He subrayado sugerencias en todo el texto. Haz clic en ellas.`, 'system');
+      if(target.isSelection) addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en la parte que seleccionaste. Haz clic en ellas para revisarlas.`, 'system');
+      else addMessageToChat(`He subrayado en púrpura ${analysisData.correcciones.length} sugerencias en todo el texto. Haz clic en ellas.`, 'system');
     } else {
-      addMessageToChat("El texto que revisé está excelente. No veo necesidad de cambios gramaticales.", 'model');
+      addMessageToChat("¡El texto que revisé está excelente! No veo necesidad de cambios gramaticales.", 'model');
     }
 
   } catch (error) {
@@ -838,7 +989,7 @@ ${target.text}
   }
 }
 
-// --- FUNCIÓN 2: ANÁLISIS DE TEXTO / EJERCICIOS ---
+// --- FUNCIÓN 2: CRÍTICA LITERARIA ---
 async function handleLiteraryAnalysis() {
   const target = getTargetText();
   if (!target.text.trim()) {
@@ -1066,6 +1217,7 @@ async function getApiKey() {
   return null;
 }
 
+// Optimizamos para buscar siempre los modelos "flash" que son más rápidos y baratos en tokens
 async function findSupportedModel(apiKey) {
     if (supportedModelName) return supportedModelName;
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
@@ -1124,7 +1276,7 @@ function loadSavedText() {
     textEditor.innerHTML = savedContent;
   }
 }
-function startAutoSave() { setInterval(() => saveContent(false), 3000); } 
+function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
 
 function downloadAsDocx() {
   const content = textEditor.innerHTML;
