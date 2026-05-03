@@ -337,6 +337,15 @@
     100% { transform: scale(1); }
   }
 
+  /* Estilo para el texto mientras se escucha (aún no final) */
+  .interim-text {
+    color: #94a3b8;
+    background-color: transparent;
+    border-bottom: 1px dashed #cbd5e1;
+    pointer-events: none;
+    font-style: italic;
+  }
+
   #page-counter {
     margin-left: auto;
     font-size: 0.75rem;
@@ -603,8 +612,8 @@
       </div>
       
       <div id="pages-container">
-        <!-- Editor Único de Texto -->
-        <div id="text-editor" contenteditable="true" spellcheck="true" lang="es"></div>
+        <!-- Editor Único de Texto con Autocorrección Nativa (autocorrect / autocapitalize) -->
+        <div id="text-editor" contenteditable="true" spellcheck="true" autocorrect="on" autocapitalize="sentences" lang="es"></div>
       </div>
     </div>
 
@@ -739,26 +748,27 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('read-aloud-btn', toggleReadAloud);
 });
 
-// --- MÓDULO DE DICTADO DE VOZ ---
+// --- MÓDULO DE DICTADO DE VOZ CON ESCRITURA EN VIVO Y AUTO-PUNTUACIÓN ---
 function initDictationModule() {
   const dictationBtn = document.getElementById('dictation-btn');
   if (!dictationBtn) return;
 
-  // Verificamos compatibilidad nativa (Chrome, Edge, Safari, algunos Firefox)
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   
   if (!SpeechRecognition) {
-    dictationBtn.style.display = 'none'; // Lo ocultamos si el navegador no lo soporta
+    dictationBtn.style.display = 'none'; 
     console.warn("API de dictado por voz no soportada en este navegador.");
     return;
   }
 
   let recognition = new SpeechRecognition();
   let isRecording = false;
+  let interimSpan = null; 
+  let dictationPauseTimer = null; // Temporizador para la auto-puntuación
 
-  recognition.continuous = true; // Sigue escuchando aunque hagas pausas
-  recognition.interimResults = false; // Solo procesa resultados finales para evitar borrar texto accidentalmente
-  recognition.lang = 'es-ES'; // Idioma por defecto
+  recognition.continuous = true; 
+  recognition.interimResults = true; 
+  recognition.lang = 'es-ES'; 
 
   recognition.onstart = () => {
     isRecording = true;
@@ -767,23 +777,66 @@ function initDictationModule() {
   };
 
   recognition.onresult = (event) => {
-    let transcript = "";
+    let finalTranscript = '';
+    let interimTranscript = '';
+
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        transcript += event.results[i][0].transcript + " ";
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interimTranscript += event.results[i][0].transcript;
       }
     }
-    
-    if (transcript.trim() !== "") {
-      // Nos aseguramos de que el editor tenga foco antes de insertar
-      textEditor.focus();
+
+    // 1. Mostrar texto interino (en vivo)
+    if (interimTranscript) {
+      if (!interimSpan) {
+        const uniqueId = 'interim-span-' + Date.now();
+        textEditor.focus();
+        document.execCommand('insertHTML', false, `<span id="${uniqueId}" class="interim-text"></span>`);
+        interimSpan = document.getElementById(uniqueId);
+      }
+      if (interimSpan) {
+        interimSpan.textContent = interimTranscript + "...";
+      }
+    }
+
+    // 2. Procesar texto finalizado
+    if (finalTranscript) {
+      if (interimSpan) {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNode(interimSpan);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand('delete'); 
+        interimSpan = null;
+      }
+
+      // Reiniciamos el temporizador de pausas cada vez que recibe un texto final
+      clearTimeout(dictationPauseTimer);
+
+      let formattedText = formatDictationTranscript(finalTranscript);
       
-      // Usamos execCommand 'insertText' para que el texto se inserte donde está el cursor
-      // y además respete la función de deshacer (Ctrl+Z) del propio editor.
-      document.execCommand('insertText', false, transcript);
+      textEditor.focus();
+      document.execCommand('insertText', false, formattedText);
       
       updatePageCounter();
       saveContent(false);
+
+      // AUTO-PUNTUACIÓN POR PAUSAS
+      // Si el usuario deja de hablar por 2 segundos, y no hay ya un signo, añadimos un punto.
+      dictationPauseTimer = setTimeout(() => {
+        if (isRecording) {
+          const currentText = textEditor.innerText.trim();
+          // Comprobamos que el texto no esté vacío y no termine ya en un signo de puntuación
+          if (currentText.length > 0 && !/[.,;:?!]$/.test(currentText)) {
+            textEditor.focus();
+            document.execCommand('insertText', false, '. ');
+            saveContent(false);
+          }
+        }
+      }, 2000);
     }
   };
 
@@ -796,14 +849,14 @@ function initDictationModule() {
   };
 
   recognition.onend = () => {
-    // Si isRecording sigue siendo true, significa que Chrome detuvo el motor por silencio,
-    // así que lo reiniciamos para que la grabación sea "continua" real.
+    clearTimeout(dictationPauseTimer);
+    if (interimSpan) {
+      interimSpan.remove();
+      interimSpan = null;
+    }
+
     if (isRecording) {
-      try {
-        recognition.start();
-      } catch (e) {
-        stopDictation();
-      }
+      try { recognition.start(); } catch (e) { stopDictation(); }
     } else {
       stopDictation();
     }
@@ -811,14 +864,19 @@ function initDictationModule() {
 
   function stopDictation() {
     isRecording = false;
+    clearTimeout(dictationPauseTimer);
     try { recognition.stop(); } catch(e) {}
     dictationBtn.classList.remove('recording');
     showToast("Dictado por voz pausado.");
+    
+    if (interimSpan) {
+      interimSpan.remove();
+      interimSpan = null;
+    }
   }
 
   dictationBtn.addEventListener('click', () => {
     if (isRecording) {
-      // Si ya está grabando, forzamos detenerlo
       isRecording = false; 
       stopDictation();
     } else {
@@ -830,6 +888,36 @@ function initDictationModule() {
       }
     }
   });
+}
+
+function formatDictationTranscript(transcript) {
+  let t = transcript.trim();
+  
+  const replacements = [
+      { regex: /\s+coma\b/gi, val: ',' },
+      { regex: /\s+punto y coma\b/gi, val: ';' },
+      { regex: /\s+punto\b/gi, val: '.' },
+      { regex: /\s+dos puntos\b/gi, val: ':' },
+      { regex: /\s+nueva l[ií]nea\b/gi, val: '\n' },
+      { regex: /\s+signo de interrogaci[óo]n\b/gi, val: '?' },
+      { regex: /\s+signo de exclamaci[óo]n\b/gi, val: '!' }
+  ];
+  replacements.forEach(r => {
+      t = t.replace(r.regex, r.val);
+  });
+
+  t = t.replace(/\s+([.,;:?!])/g, '$1');
+
+  // Capitalización Inteligente
+  const editorText = textEditor.innerText.trim();
+  const lastChar = editorText.slice(-1);
+  const needsCapitalization = editorText === "" || ['.', '!', '?', '\n'].includes(lastChar);
+
+  if (t.length > 0 && needsCapitalization) {
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  
+  return t + (t.endsWith('\n') ? '' : ' ');
 }
 // --- FIN DEL MÓDULO DE DICTADO DE VOZ ---
 
