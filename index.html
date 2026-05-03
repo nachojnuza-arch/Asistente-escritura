@@ -1313,54 +1313,54 @@ async function getApiKey() {
   return null;
 }
 
-async function callGoogleAI(history, apiKey) {
-  // Lista de modelos con excelente cuota gratuita, ordenados por prioridad.
-  const modelsToTry = [
-    'gemini-1.5-flash',      // El más rápido y con mayor cuota gratuita actual
-    'gemini-1.5-flash-8b',   // Alternativa ultra rápida
-    'gemini-1.0-pro',        // Muy estable y generoso en límites
-    'gemini-pro'             // Nombre heredado (funciona en el 100% de las regiones y cuentas)
-  ];
-
-  let lastError = null;
-
-  for (const model of modelsToTry) {
+// 🆕 Detección dinámica del mejor modelo disponible según la API Key
+let cachedBestModel = null;
+async function getBestModel(apiKey) {
+    if (cachedBestModel) return cachedBestModel;
+    const keyToUse = apiKey || geminiApiKey;
+    if (!keyToUse) return 'gemini-1.5-flash';
+    
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      
-      const response = await fetch(url, {
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ contents: history })
-      });
-      
-      const data = await response.json();
-      
-      // Si la respuesta es exitosa y contiene el texto, lo devolvemos
-      if (response.ok && data.candidates && data.candidates[0].content.parts[0].text) {
-        console.log("Modelo conectado con éxito:", model);
-        return data.candidates[0].content.parts[0].text;
-      } 
-      // Si hay error de la API (ej. modelo no disponible en tu región)
-      else if (data.error) {
-        console.warn(`El modelo ${model} falló:`, data.error.message);
-        lastError = data.error.message;
-        
-        // Si el error es por una clave API incorrecta, no tiene sentido seguir probando
-        if (response.status === 400 && data.error.message.includes('API key not valid')) {
-           throw new Error("API Key inválida. Verifica tu clave de Google AI Studio.");
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${keyToUse}`);
+        if (res.ok) {
+            const data = await res.json();
+            const bestModel = data.models.find(m => m.name.includes('gemini-2.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
+                              data.models.find(m => m.name.includes('gemini-2.0-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
+                              data.models.find(m => m.name.includes('gemini-1.5-flash') && m.supportedGenerationMethods?.includes('generateContent')) ||
+                              data.models.find(m => m.name.includes('gemini') && m.supportedGenerationMethods?.includes('generateContent'));
+                              
+            if (bestModel) {
+                cachedBestModel = bestModel.name.split('/').pop();
+                console.log(`🤖 Modelo dinámico seleccionado: ${cachedBestModel}`);
+                return cachedBestModel;
+            }
         }
-        continue; // Pasamos al siguiente modelo de la lista
-      }
-    } catch (error) {
-      console.warn(`Error de red al intentar usar ${model}:`, error);
-      lastError = error.message;
-      continue;
-    }
-  }
+    } catch(e) { console.warn("⚠️ Fallo la obtención de modelos.", e); }
+    return 'gemini-1.5-flash';
+}
 
-  // Si se agota la lista y ningún modelo funcionó:
-  throw new Error(`Error API: ${lastError || 'Ningún modelo compatible encontrado en tu cuenta/región.'}`);
+async function callGoogleAI(history, apiKey) {
+  const modelToUse = await getBestModel(apiKey);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+  
+  const response = await fetch(url, {
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify({ contents: history })
+  });
+  
+  const data = await response.json();
+  
+  if (response.ok && data.candidates && data.candidates[0].content.parts[0].text) {
+    return data.candidates[0].content.parts[0].text;
+  } else {
+    // Manejo de errores
+    if (data.error && data.error.message.includes('API key not valid')) {
+        cachedBestModel = null; // Limpiar caché si la key es inválida
+        throw new Error("API Key inválida. Verifica tu clave de Google AI Studio.");
+    }
+    throw new Error(`Error API: ${data.error?.message || 'Petición rechazada'}`);
+  }
 }
 
 // --- PAGINACIÓN SIMULADA ---
