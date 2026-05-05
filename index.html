@@ -1022,8 +1022,11 @@ function toggleReadAloud() {
 
   window.speechSynthesis.cancel();
   
-  // Dividir por puntuación (ahora incluimos saltos de línea para no desfasar el resaltado)
-  const textChunks = textToRead.match(/[^.!?\n]+[.!?\n]*/g) || [textToRead];
+  // Convertir saltos de línea físicos en espacios (mantiene la longitud exacta para no romper el resaltado)
+  textToRead = textToRead.replace(/[\r\n]/g, ' ');
+
+  // Dividir el texto ÚNICAMENTE por signos de puntuación reales (. ! ?)
+  const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
   const validChunks = textChunks.map(c => c.trim()).filter(c => c.length > 0);
 
   if (validChunks.length === 0) return;
