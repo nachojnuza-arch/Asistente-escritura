@@ -14,6 +14,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Librería de Iconos Modernos -->
 <script src="https://unpkg.com/lucide@latest"></script>
+<!-- Librería para generar PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
   /* --- ESTILOS BASE Y VARIABLES (ACADÉMICO / MODERNO) --- */
@@ -114,7 +116,7 @@
     background: rgba(255,255,255,0.25); 
   }
 
-  #ai-role-select {
+  #ai-role-select, #download-format-select {
     background: white;
     color: var(--text-main);
     border: 1px solid transparent;
@@ -444,6 +446,62 @@
     body.chat-visible #chat-container { width: 100%; position: absolute; height: 100%; z-index: 50; }
   }
 
+  /* --- LECTOR DE VOZ (RESALTADO DINÁMICO) --- */
+  /* Sobrescribimos el color de la selección de texto tradicional solo cuando está leyendo */
+  body.is-speaking ::selection {
+    background-color: rgba(37, 99, 235, 0.25) !important;
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+
+  /* --- MODAL DE LA BIBLIOTECA --- */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    display: none; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .modal-overlay.show { display: flex; opacity: 1; }
+  .modal-box {
+    background: var(--bg-panel); border-radius: var(--radius);
+    width: 90%; max-width: 500px; max-height: 80vh;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    display: flex; flex-direction: column;
+    transform: translateY(20px); transition: transform 0.3s;
+  }
+  .modal-overlay.show .modal-box { transform: translateY(0); }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .modal-header h3 { font-size: 1.1rem; color: var(--text-main); font-weight: 600; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: 4px; transition: 0.2s; }
+  .modal-close:hover { background: #f1f5f9; color: var(--text-main); }
+  .modal-body { padding: 10px 20px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  
+  .library-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: white; transition: all 0.2s;
+  }
+  .library-item:hover { border-color: #93c5fd; box-shadow: var(--shadow-sm); }
+  .library-item-info { flex: 1; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .library-item-title { font-weight: 500; font-size: 0.95rem; color: var(--text-main); }
+  .library-item-date { font-size: 0.75rem; color: var(--text-muted); }
+  .library-item-actions { display: flex; gap: 4px; }
+  .library-item-actions button {
+    background: #f8fafc; border: 1px solid transparent; cursor: pointer;
+    color: var(--text-muted); padding: 6px; border-radius: 4px; transition: 0.2s;
+  }
+  .library-item-actions button:hover { background: #e2e8f0; color: var(--accent); }
+  .library-item-actions button.del-btn:hover { color: #ef4444; background: #fee2e2; }
+
   /* COMPONENTES AUXILIARES */
   #loading {
     display: none;
@@ -525,7 +583,11 @@
       <i data-lucide="sparkles" size="14"></i> Analizar
     </button>
     
-    <button id="download-docx-btn" class="tb-btn" title="Descargar Documento">
+    <select id="download-format-select" title="Formato de descarga">
+      <option value="docx">DOCX</option>
+      <option value="pdf">PDF</option>
+    </select>
+    <button id="download-btn" class="tb-btn" title="Descargar Documento">
       <i data-lucide="download" size="14"></i> Descargar
     </button>
   </div>
@@ -616,6 +678,17 @@
 <div id="toast"></div>
 <div id="loading"><div class="spinner"></div><p id="loading-msg">Procesando...</p></div>
 
+<!-- Modal de Biblioteca -->
+<div id="library-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>📚 Mi Biblioteca</h3>
+      <button id="close-library-btn" class="modal-close"><i data-lucide="x" size="18"></i></button>
+    </div>
+    <div id="library-list" class="modal-body"></div>
+  </div>
+</div>
+
 <script>
 // --- REGISTRO DEL SERVICE WORKER (Para la PWA) ---
 if ('serviceWorker' in navigator) {
@@ -643,6 +716,10 @@ let currentEditorText = "";
 let isSpeaking = false;
 let currentUtteranceObj = null; 
 let availableVoices = [];
+
+// Variables para la Biblioteca
+let docsList = [];
+let currentDocId = null;
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -726,7 +803,12 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('check-style-btn', handleLiteraryAnalysis);
   
   btn('save-now-btn', () => saveContent(true));
-  btn('download-docx-btn', downloadAsDocx);
+  btn('download-btn', handleDownload);
+
+  btn('new-doc-btn', createNewDocumentUI);
+  btn('library-btn', openLibrary);
+  btn('clear-doc-btn', clearDocumentUI);
+  document.getElementById('close-library-btn')?.addEventListener('click', closeLibrary);
 
   if (chatForm) chatForm.addEventListener('submit', handleChatMessage);
 
@@ -977,42 +1059,21 @@ function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
-    document.body.classList.remove('is-speaking');
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
-    window.getSelection().removeAllRanges(); // Limpiamos el resaltado al pausar
     showToast("Lectura detenida");
     return;
   }
 
   let textToRead = "";
-  const sel = window.getSelection();
-  let lastRange = null; // Guardará la posición para buscar siempre hacia adelante
-  const selectedText = sel.toString().trim();
+  const selectedText = window.getSelection().toString().trim();
 
   if (selectedText.length > 0) {
     textToRead = selectedText;
     showToast("Leyendo selección...");
-    
-    // Contraer la selección a su inicio para empezar a buscar desde ahí
-    if (sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      lastRange = range.cloneRange();
-    }
   } else {
     textToRead = textEditor.innerText.trim();
     showToast("Leyendo todo el documento...");
-    
-    // Mover el cursor invisible al principio del editor para empezar la búsqueda
-    const range = document.createRange();
-    range.setStart(textEditor, 0);
-    range.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(range);
-    lastRange = range.cloneRange();
   }
 
   if (!textToRead) {
@@ -1020,19 +1081,18 @@ function toggleReadAloud() {
     return;
   }
 
+  // Limpiar saltos de línea (el lector los interpreta como pausas aunque no haya punto)
+  textToRead = textToRead.replace(/\s+/g, ' ').trim();
+
   window.speechSynthesis.cancel();
   
-  // Convertir saltos de línea físicos en espacios (mantiene la longitud exacta para no romper el resaltado)
-  textToRead = textToRead.replace(/[\r\n]/g, ' ');
-
-  // Dividir el texto ÚNICAMENTE por signos de puntuación reales (. ! ?)
+  // Dividir el texto en oraciones cortas para evitar el límite de 15 segundos de Chrome
   const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
   const validChunks = textChunks.map(c => c.trim()).filter(c => c.length > 0);
 
   if (validChunks.length === 0) return;
 
   isSpeaking = true;
-  document.body.classList.add('is-speaking'); // Aplica nuestro CSS moderno
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
   lucide.createIcons();
 
@@ -1049,49 +1109,12 @@ function toggleReadAloud() {
     utterance.volume = 1.0;
     if (voiceToUse) utterance.voice = voiceToUse;
 
-    // --- MÓDULO DE RESALTADO DINÁMICO ---
-    utterance.onboundary = (e) => {
-      if (e.name === 'word') {
-        const word = chunk.substring(e.charIndex, e.charIndex + e.charLength).trim();
-        if (!word) return;
-
-        // Restauramos la última posición conocida para buscar progresivamente hacia adelante
-        if (lastRange) {
-          sel.removeAllRanges();
-          sel.addRange(lastRange);
-        }
-
-        // Utilizamos la búsqueda nativa del navegador (es ultrarrápida y exacta)
-        const found = window.find(word, false, false, false, false, false, false);
-
-        if (found) {
-          let container = sel.anchorNode;
-          if (container && container.nodeType === 3) container = container.parentNode;
-          
-          // Verificamos que no se haya salido del editor de texto por accidente
-          if (textEditor.contains(container)) {
-            lastRange = sel.getRangeAt(0).cloneRange(); // Guardamos el nuevo punto de partida
-            
-            // Scrolling automático: Si la palabra está saliendo de la pantalla, bajamos
-            const rect = lastRange.getBoundingClientRect();
-            if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
-              window.scrollBy({ top: rect.top - window.innerHeight / 2, behavior: 'smooth' });
-            }
-          } else {
-            sel.removeAllRanges();
-          }
-        }
-      }
-    };
-
     // Solo restaurar el botón cuando termine el ÚLTIMO fragmento
     if (index === validChunks.length - 1) {
       utterance.onend = () => {
         isSpeaking = false;
-        document.body.classList.remove('is-speaking');
         document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
         lucide.createIcons();
-        window.getSelection().removeAllRanges(); // Limpiamos al terminar todo
       };
     }
 
@@ -1101,10 +1124,8 @@ function toggleReadAloud() {
         console.warn("Error del TTS:", e);
       }
       isSpeaking = false;
-      document.body.classList.remove('is-speaking');
       document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
       lucide.createIcons();
-      window.getSelection().removeAllRanges();
     };
 
     // Agregamos a la cola nativa (el navegador las enlaza sin pausas artificiales)
@@ -1481,27 +1502,237 @@ function updatePageCounter() {
   counter.textContent = `Aprox. ${estimatedPages} página(s)`;
 }
 
-// --- AUTOGUARDADO / DESCARGA ---
+// --- SISTEMA DE BIBLIOTECA Y AUTOGUARDADO ---
 function saveContent(feedback = false) {
   if (!textEditor) return;
-  localStorage.setItem('editor_content', textEditor.innerHTML);
+  
+  if (!currentDocId) {
+     currentDocId = Date.now().toString();
+     docsList.push({ id: currentDocId, title: "Nuevo Documento", updatedAt: Date.now() });
+     localStorage.setItem('current_doc_id', currentDocId);
+  }
+  
+  localStorage.setItem(`doc_${currentDocId}`, textEditor.innerHTML);
+  
+  const docIndex = docsList.findIndex(d => d.id === currentDocId);
+  if (docIndex > -1) {
+     docsList[docIndex].updatedAt = Date.now();
+  }
+  localStorage.setItem('escritura_pro_docs', JSON.stringify(docsList));
+
   if (feedback) showToast("Progreso guardado");
 }
 
 function loadSavedText() {
-  const savedContent = localStorage.getItem('editor_content');
-  if (savedContent) {
-    textEditor.innerHTML = savedContent;
+  docsList = JSON.parse(localStorage.getItem('escritura_pro_docs') || '[]');
+  currentDocId = localStorage.getItem('current_doc_id');
+
+  // Migración silenciosa de la versión antigua
+  if (docsList.length === 0) {
+    const oldContent = localStorage.getItem('editor_content');
+    if (oldContent) {
+      const newId = Date.now().toString();
+      docsList.push({ id: newId, title: "Documento Anterior", updatedAt: Date.now() });
+      localStorage.setItem(`doc_${newId}`, oldContent);
+      currentDocId = newId;
+      localStorage.setItem('current_doc_id', newId);
+      localStorage.setItem('escritura_pro_docs', JSON.stringify(docsList));
+      localStorage.removeItem('editor_content');
+    }
+  }
+  
+  if (!currentDocId && docsList.length > 0) {
+     currentDocId = docsList[0].id;
+     localStorage.setItem('current_doc_id', currentDocId);
+  }
+  
+  if (currentDocId) {
+     textEditor.innerHTML = localStorage.getItem(`doc_${currentDocId}`) || "";
+  } else {
+     textEditor.innerHTML = "";
   }
 }
+
+function createNewDocumentUI() {
+  const title = prompt("Asigna un título al nuevo documento:", "Documento sin título");
+  if (title === null) return; 
+  
+  window.speechSynthesis.cancel(); // Detener lectura si estaba activo
+  saveContent(); // Guardar el actual antes de cambiar
+  
+  currentDocId = Date.now().toString();
+  docsList.push({ id: currentDocId, title: title.trim() || "Sin Título", updatedAt: Date.now() });
+  localStorage.setItem('current_doc_id', currentDocId);
+  localStorage.setItem('escritura_pro_docs', JSON.stringify(docsList));
+  
+  textEditor.innerHTML = '';
+  saveContent();
+  updatePageCounter();
+  showToast("Nuevo documento creado");
+}
+
+function clearDocumentUI() {
+  if (confirm('¿Estás seguro de que deseas limpiar la hoja? Esto borrará el contenido de este documento.')) {
+    window.speechSynthesis.cancel();
+    textEditor.innerHTML = '';
+    saveContent();
+    updatePageCounter();
+    showToast("Hoja limpiada");
+  }
+}
+
+function openLibrary() {
+  renderLibrary();
+  document.getElementById('library-modal').classList.add('show');
+}
+
+function closeLibrary() {
+  document.getElementById('library-modal').classList.remove('show');
+}
+
+function renderLibrary() {
+  const listEl = document.getElementById('library-list');
+  listEl.innerHTML = '';
+  
+  const sortedDocs = [...docsList].sort((a,b) => b.updatedAt - a.updatedAt);
+  
+  if(sortedDocs.length === 0) {
+     listEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:0.9rem; padding: 20px;">Tu biblioteca está vacía.</p>';
+     return;
+  }
+  
+  sortedDocs.forEach(doc => {
+    const dateStr = new Date(doc.updatedAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+    const item = document.createElement('div');
+    item.className = 'library-item';
+    if (doc.id === currentDocId) item.style.borderLeft = '4px solid var(--accent)';
+    
+    item.innerHTML = `
+      <div class="library-item-info">
+        <div class="library-item-title">${doc.title} ${doc.id === currentDocId ? '<span style="font-size:10px; color:var(--accent);">(Activo)</span>' : ''}</div>
+        <div class="library-item-date">Última mod: ${dateStr}</div>
+      </div>
+      <div class="library-item-actions">
+         <button class="rename-btn" title="Renombrar"><i data-lucide="edit-2" size="14"></i></button>
+         <button class="del-btn" title="Eliminar documento"><i data-lucide="trash" size="14"></i></button>
+      </div>
+    `;
+    
+    item.querySelector('.library-item-info').addEventListener('click', () => {
+       if (doc.id === currentDocId) { closeLibrary(); return; }
+       window.speechSynthesis.cancel();
+       saveContent(); 
+       currentDocId = doc.id;
+       localStorage.setItem('current_doc_id', currentDocId);
+       textEditor.innerHTML = localStorage.getItem(`doc_${doc.id}`) || '';
+       updatePageCounter();
+       closeLibrary();
+       showToast(`Abierto: ${doc.title}`);
+    });
+    
+    item.querySelector('.rename-btn').addEventListener('click', (e) => {
+       e.stopPropagation();
+       const newTitle = prompt("Escribe el nuevo nombre:", doc.title);
+       if (newTitle && newTitle.trim()) {
+          doc.title = newTitle.trim();
+          doc.updatedAt = Date.now();
+          localStorage.setItem('escritura_pro_docs', JSON.stringify(docsList));
+          renderLibrary();
+       }
+    });
+    
+    item.querySelector('.del-btn').addEventListener('click', (e) => {
+       e.stopPropagation();
+       if(confirm(`¿Estás seguro de eliminar el documento "${doc.title}" de forma permanente?`)) {
+          docsList = docsList.filter(d => d.id !== doc.id);
+          localStorage.removeItem(`doc_${doc.id}`);
+          localStorage.setItem('escritura_pro_docs', JSON.stringify(docsList));
+          
+          if (doc.id === currentDocId) {
+             window.speechSynthesis.cancel();
+             if(docsList.length > 0) {
+                currentDocId = docsList[0].id;
+                localStorage.setItem('current_doc_id', currentDocId);
+                textEditor.innerHTML = localStorage.getItem(`doc_${currentDocId}`) || '';
+             } else {
+                currentDocId = null;
+                localStorage.removeItem('current_doc_id');
+                textEditor.innerHTML = '';
+             }
+             updatePageCounter();
+          }
+          renderLibrary();
+       }
+    });
+    
+    listEl.appendChild(item);
+  });
+  lucide.createIcons();
+}
+
 function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
+
+// --- EXPORTACIÓN A PDF Y DOCX ---
+function handleDownload() {
+  const format = document.getElementById('download-format-select').value;
+  if (format === 'pdf') {
+    downloadAsPDF();
+  } else {
+    downloadAsDocx();
+  }
+}
+
+function downloadAsPDF() {
+  const plainText = textEditor.innerText.trim();
+  if (!plainText) { showToast("Nada que descargar"); return; }
+  
+  let defaultTitle = "Documento";
+  const currentDoc = docsList.find(d => d.id === currentDocId);
+  if (currentDoc) defaultTitle = currentDoc.title;
+  
+  const title = prompt("Confirma el título del PDF:", defaultTitle);
+  if (title === null) return; // Se canceló
+  
+  showLoading("Generando archivo PDF...");
+  
+  // Creamos un contenedor limpio para el PDF
+  const element = document.createElement('div');
+  element.innerHTML = `
+    <h2 style="text-align:center; font-family: 'Helvetica', 'Arial', sans-serif; margin-bottom: 25px; color: #1e293b;">${title || 'Documento'}</h2>
+    <div style="font-family: 'Helvetica', 'Arial', sans-serif; font-size: 14px; line-height: 1.6; text-align: justify; white-space: pre-wrap; word-break: break-word;">
+      ${textEditor.innerHTML}
+    </div>
+  `;
+  
+  const options = {
+    margin:       15,
+    filename:     `${title || 'Documento'}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(options).from(element).save().then(() => {
+    hideLoading();
+    showToast("PDF descargado con éxito");
+  }).catch(err => {
+    hideLoading();
+    showToast("Error al generar PDF");
+    console.error(err);
+  });
+}
 
 function downloadAsDocx() {
   const content = textEditor.innerHTML;
   const plainText = textEditor.innerText;
   
   if (!plainText.trim()) { showToast("Nada que descargar"); return; }
-  const title = prompt("Título:", "Documento") || "Documento";
+  
+  let defaultTitle = "Documento";
+  const currentDoc = docsList.find(d => d.id === currentDocId);
+  if (currentDoc) defaultTitle = currentDoc.title;
+
+  const title = prompt("Título del archivo:", defaultTitle) || "Documento";
   
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Arial, sans-serif; padding:40px; max-width:800px; margin:0 auto; line-height:1.6;"><h1>${title}</h1><div>${content}</div></body></html>`;
   
