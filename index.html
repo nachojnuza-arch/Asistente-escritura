@@ -977,21 +977,42 @@ function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
+    document.body.classList.remove('is-speaking');
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
+    window.getSelection().removeAllRanges(); // Limpiamos el resaltado al pausar
     showToast("Lectura detenida");
     return;
   }
 
   let textToRead = "";
-  const selectedText = window.getSelection().toString().trim();
+  const sel = window.getSelection();
+  let lastRange = null; // Guardará la posición para buscar siempre hacia adelante
+  const selectedText = sel.toString().trim();
 
   if (selectedText.length > 0) {
     textToRead = selectedText;
     showToast("Leyendo selección...");
+    
+    // Contraer la selección a su inicio para empezar a buscar desde ahí
+    if (sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      lastRange = range.cloneRange();
+    }
   } else {
     textToRead = textEditor.innerText.trim();
     showToast("Leyendo todo el documento...");
+    
+    // Mover el cursor invisible al principio del editor para empezar la búsqueda
+    const range = document.createRange();
+    range.setStart(textEditor, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    lastRange = range.cloneRange();
   }
 
   if (!textToRead) {
@@ -999,18 +1020,16 @@ function toggleReadAloud() {
     return;
   }
 
-  // Limpiar saltos de línea (el lector los interpreta como pausas aunque no haya punto)
-  textToRead = textToRead.replace(/\s+/g, ' ').trim();
-
   window.speechSynthesis.cancel();
   
-  // Dividir el texto en oraciones cortas para evitar el límite de 15 segundos de Chrome
-  const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
+  // Dividir por puntuación (ahora incluimos saltos de línea para no desfasar el resaltado)
+  const textChunks = textToRead.match(/[^.!?\n]+[.!?\n]*/g) || [textToRead];
   const validChunks = textChunks.map(c => c.trim()).filter(c => c.length > 0);
 
   if (validChunks.length === 0) return;
 
   isSpeaking = true;
+  document.body.classList.add('is-speaking'); // Aplica nuestro CSS moderno
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
   lucide.createIcons();
 
@@ -1027,12 +1046,49 @@ function toggleReadAloud() {
     utterance.volume = 1.0;
     if (voiceToUse) utterance.voice = voiceToUse;
 
+    // --- MÓDULO DE RESALTADO DINÁMICO ---
+    utterance.onboundary = (e) => {
+      if (e.name === 'word') {
+        const word = chunk.substring(e.charIndex, e.charIndex + e.charLength).trim();
+        if (!word) return;
+
+        // Restauramos la última posición conocida para buscar progresivamente hacia adelante
+        if (lastRange) {
+          sel.removeAllRanges();
+          sel.addRange(lastRange);
+        }
+
+        // Utilizamos la búsqueda nativa del navegador (es ultrarrápida y exacta)
+        const found = window.find(word, false, false, false, false, false, false);
+
+        if (found) {
+          let container = sel.anchorNode;
+          if (container && container.nodeType === 3) container = container.parentNode;
+          
+          // Verificamos que no se haya salido del editor de texto por accidente
+          if (textEditor.contains(container)) {
+            lastRange = sel.getRangeAt(0).cloneRange(); // Guardamos el nuevo punto de partida
+            
+            // Scrolling automático: Si la palabra está saliendo de la pantalla, bajamos
+            const rect = lastRange.getBoundingClientRect();
+            if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+              window.scrollBy({ top: rect.top - window.innerHeight / 2, behavior: 'smooth' });
+            }
+          } else {
+            sel.removeAllRanges();
+          }
+        }
+      }
+    };
+
     // Solo restaurar el botón cuando termine el ÚLTIMO fragmento
     if (index === validChunks.length - 1) {
       utterance.onend = () => {
         isSpeaking = false;
+        document.body.classList.remove('is-speaking');
         document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
         lucide.createIcons();
+        window.getSelection().removeAllRanges(); // Limpiamos al terminar todo
       };
     }
 
@@ -1042,8 +1098,10 @@ function toggleReadAloud() {
         console.warn("Error del TTS:", e);
       }
       isSpeaking = false;
+      document.body.classList.remove('is-speaking');
       document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
       lucide.createIcons();
+      window.getSelection().removeAllRanges();
     };
 
     // Agregamos a la cola nativa (el navegador las enlaza sin pausas artificiales)
