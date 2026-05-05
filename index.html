@@ -563,6 +563,13 @@
       <option value="profesor">Profesor Universitario</option>
     </select>
 
+    <button id="library-btn" class="tb-btn" title="Mi Biblioteca">
+      <i data-lucide="library" size="14"></i> Biblioteca
+    </button>
+    <button id="new-doc-btn" class="tb-btn" title="Nuevo Documento">
+      <i data-lucide="file-plus" size="14"></i> Nuevo
+    </button>
+
     <button id="change-api-key-btn" class="tb-btn" title="Configurar API Key">
       <i data-lucide="key" size="14"></i> API Key
     </button>
@@ -620,6 +627,7 @@
     <div id="editor-container">
       <div id="editor-toolbar">
         <div class="toolbar-group">
+          <button type="button" id="clear-doc-btn" title="Limpiar Hoja de Texto"><i data-lucide="eraser" size="14"></i></button>
           <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="14"></i></button>
           <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="14"></i></button>
         </div>
@@ -734,6 +742,13 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedText();
   updatePageCounter();
   startAutoSave();
+
+  // Abrir la biblioteca automáticamente al entrar si hay más de un documento creado
+  // Usamos sessionStorage para que solo salte la primera vez que se carga la pestaña
+  if (docsList.length > 1 && !sessionStorage.getItem('library_shown')) {
+     openLibrary();
+     sessionStorage.setItem('library_shown', 'true');
+  }
 
   // Cargar lista de voces disponibles para el TTS
   populateVoiceList();
