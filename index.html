@@ -697,6 +697,43 @@
   </div>
 </div>
 
+<!-- Overlay y Sidebar Derecha -->
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div id="right-sidebar">
+  <div class="sidebar-header">
+    <h3>Menú de Opciones</h3>
+    <button id="close-sidebar-btn" class="modal-close"><i data-lucide="x" size="18"></i></button>
+  </div>
+  <div class="sidebar-content">
+    <div class="sidebar-section">
+      <h4>Archivo</h4>
+      <button id="new-doc-btn" class="sb-btn" title="Nuevo Documento"><i data-lucide="file-plus" size="16"></i> Nuevo</button>
+      <button id="library-btn" class="sb-btn" title="Mi Biblioteca"><i data-lucide="library" size="16"></i> Biblioteca</button>
+      <button id="save-now-btn" class="sb-btn" title="Guardar Progreso"><i data-lucide="save" size="16"></i> Guardar</button>
+    </div>
+
+    <div class="sidebar-section">
+      <h4>Asistente IA</h4>
+      <select id="ai-role-select" class="sb-select" title="Selecciona el rol de la IA">
+        <option value="literario">Asistente Literario</option>
+        <option value="profesor">Profesor Universitario</option>
+      </select>
+      <button id="check-errors-btn" class="sb-btn primary" title="Subrayar errores en selección o documento">
+        <i data-lucide="check-circle" size="16"></i> Corregir Errores
+      </button>
+      <button id="check-style-btn" class="sb-btn secondary" title="Analizar el texto según el rol seleccionado">
+        <i data-lucide="sparkles" size="16"></i> Analizar Estilo
+      </button>
+      <button id="toggle-chat-btn" class="sb-btn" title="Abrir/Cerrar Chat IA"><i data-lucide="message-square" size="16"></i> Chat IA</button>
+    </div>
+
+    <div class="sidebar-section">
+      <h4>Ajustes</h4>
+      <button id="change-api-key-btn" class="sb-btn" title="Configurar API Key"><i data-lucide="key" size="16"></i> Configurar API Key</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // --- REGISTRO DEL SERVICE WORKER (Para la PWA) ---
 if ('serviceWorker' in navigator) {
@@ -773,6 +810,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeChatBtn = document.getElementById('close-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', () => document.body.classList.toggle('chat-visible'));
   if (closeChatBtn) closeChatBtn.addEventListener('click', () => document.body.classList.remove('chat-visible'));
+
+  // Lógica del Right Sidebar
+  const openSidebarBtn = document.getElementById('open-sidebar-btn');
+  const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+  const rightSidebar = document.getElementById('right-sidebar');
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  const closeSidebar = () => { rightSidebar.classList.remove('show'); sidebarOverlay.classList.remove('show'); };
+  
+  if (openSidebarBtn) openSidebarBtn.addEventListener('click', () => { rightSidebar.classList.add('show'); sidebarOverlay.classList.add('show'); });
+  if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', closeSidebar);
+  if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
+  // Auto-cerrar sidebar en acciones clave para permitir seguir escribiendo
+  ['toggle-chat-btn', 'check-errors-btn', 'check-style-btn', 'library-btn', 'new-doc-btn'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', closeSidebar);
+  });
 
   // Manejador de Cambio de API KEY
   const changeApiKeyBtn = document.getElementById('change-api-key-btn');
