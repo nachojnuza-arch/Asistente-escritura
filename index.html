@@ -1001,6 +1001,9 @@ function toggleReadAloud() {
     return;
   }
 
+  // Limpiar saltos de línea (el lector los interpreta como pausas aunque no haya punto)
+  textToRead = textToRead.replace(/\s+/g, ' ').trim();
+
   window.speechSynthesis.cancel();
   
   setTimeout(() => {
