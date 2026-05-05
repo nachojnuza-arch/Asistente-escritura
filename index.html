@@ -642,7 +642,6 @@ let currentEditorText = "";
 // Variables para el lector de voz (Simples y directas)
 let isSpeaking = false;
 let currentUtteranceObj = null; 
-let resumeInterval = null; // Timer para evitar que Chrome se cuelgue a los 15s
 let availableVoices = [];
 
 // --- ELEMENTOS DEL DOM ---
@@ -977,7 +976,6 @@ function populateVoiceList() {
 function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
-    clearInterval(resumeInterval);
     isSpeaking = false;
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
     lucide.createIcons();
@@ -1006,10 +1004,33 @@ function toggleReadAloud() {
 
   window.speechSynthesis.cancel();
   
-  setTimeout(() => {
-    currentUtteranceObj = new SpeechSynthesisUtterance(textToRead);
+  // Dividir el texto en oraciones cortas para evitar el límite de 15 segundos de Chrome
+  const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
+  let currentChunkIndex = 0;
+
+  isSpeaking = true;
+  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+  lucide.createIcons();
+
+  function speakNextChunk() {
+    // Si se canceló la lectura manual o ya no hay texto, terminamos
+    if (currentChunkIndex >= textChunks.length || !isSpeaking) {
+      isSpeaking = false;
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      lucide.createIcons();
+      return;
+    }
+
+    let chunk = textChunks[currentChunkIndex].trim();
+    if (!chunk) {
+      currentChunkIndex++;
+      speakNextChunk();
+      return;
+    }
+
+    currentUtteranceObj = new SpeechSynthesisUtterance(chunk);
     currentUtteranceObj.lang = 'es-ES';
-    currentUtteranceObj.rate = 0.95; // Un poco más lento para enmascarar lo sintético y sonar más humano
+    currentUtteranceObj.rate = 0.95;
     currentUtteranceObj.volume = 1.0;
     
     const voiceSelect = document.getElementById('voice-select');
@@ -1023,36 +1044,23 @@ function toggleReadAloud() {
       if (spanishVoice) currentUtteranceObj.voice = spanishVoice;
     }
 
-    currentUtteranceObj.onstart = () => {
-      isSpeaking = true;
-      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
-      lucide.createIcons();
-      
-      clearInterval(resumeInterval);
-      resumeInterval = setInterval(() => {
-         if (window.speechSynthesis.speaking) {
-             window.speechSynthesis.resume();
-         }
-      }, 10000);
-    };
-
+    // Al terminar una oración, reproducimos la siguiente automáticamente
     currentUtteranceObj.onend = () => {
-      isSpeaking = false;
-      clearInterval(resumeInterval);
-      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
-      lucide.createIcons();
+      currentChunkIndex++;
+      speakNextChunk();
     };
 
     currentUtteranceObj.onerror = (e) => {
       console.warn("Error o interrupción del TTS:", e);
       isSpeaking = false;
-      clearInterval(resumeInterval);
       document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
       lucide.createIcons();
     };
 
     window.speechSynthesis.speak(currentUtteranceObj);
-  }, 100); 
+  }
+
+  setTimeout(() => speakNextChunk(), 100);
 }
 
 // --- OBTENER TEXTO A ANALIZAR ---
