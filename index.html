@@ -593,6 +593,8 @@
 
         <!-- Grupo de Voz y Sonido -->
         <div class="toolbar-group">
+          <!-- Selector de Voces -->
+          <select id="voice-select" aria-label="Voz del lector" title="Seleccionar voz" style="max-width: 140px; text-overflow: ellipsis; font-size: 0.75rem;"></select>
           <!-- Botón de lectura existente -->
           <button type="button" id="read-aloud-btn" title="Leer en voz alta (Reproducir/Pausar)"><i data-lucide="volume-2" size="14"></i></button>
           <!-- NUEVO BOTÓN: Dictado por Voz -->
@@ -641,6 +643,7 @@ let currentEditorText = "";
 let isSpeaking = false;
 let currentUtteranceObj = null; 
 let resumeInterval = null; // Timer para evitar que Chrome se cuelgue a los 15s
+let availableVoices = [];
 
 // --- ELEMENTOS DEL DOM ---
 let textEditor, chatMessages, loadingIndicator, chatForm, chatInput;
@@ -655,6 +658,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedText();
   updatePageCounter();
   startAutoSave();
+
+  // Cargar lista de voces disponibles para el TTS
+  populateVoiceList();
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
 
   // Inicializar Módulo de Dictado
   initDictationModule();
@@ -930,6 +939,41 @@ function formatDictationTranscript(transcript) {
 // --- FIN DEL MÓDULO DE DICTADO DE VOZ ---
 
 // --- LECTOR EN VOZ ALTA ---
+function populateVoiceList() {
+  availableVoices = window.speechSynthesis.getVoices();
+  const voiceSelect = document.getElementById('voice-select');
+  if (!voiceSelect) return;
+  
+  const previousSelection = voiceSelect.value;
+  voiceSelect.innerHTML = '';
+  
+  // Filtrar primero voces en español (o mostrar todas si no hay ninguna en español)
+  let esVoices = availableVoices.filter(v => v.lang.startsWith('es'));
+  let voicesToShow = esVoices.length > 0 ? esVoices : availableVoices;
+  
+  // Ordenar para poner las voces "Premium" (Natural o Google) al principio
+  voicesToShow.sort((a, b) => {
+    const aGood = a.name.includes('Natural') || a.name.includes('Google');
+    const bGood = b.name.includes('Natural') || b.name.includes('Google');
+    if (aGood && !bGood) return -1;
+    if (!aGood && bGood) return 1;
+    return 0;
+  });
+
+  voicesToShow.forEach((voice) => {
+    const option = document.createElement('option');
+    let displayName = voice.name.replace(/Microsoft |Google /g, ''); // Limpiar nombres largos
+    if (voice.name.includes('Natural') || voice.name.includes('Google')) {
+      displayName = '⭐ ' + displayName; // Destacar con una estrella las voces de alta calidad
+    }
+    option.textContent = displayName;
+    option.value = voice.name;
+    voiceSelect.appendChild(option);
+  });
+
+  if (previousSelection) voiceSelect.value = previousSelection;
+}
+
 function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
@@ -962,13 +1006,18 @@ function toggleReadAloud() {
   setTimeout(() => {
     currentUtteranceObj = new SpeechSynthesisUtterance(textToRead);
     currentUtteranceObj.lang = 'es-ES';
-    currentUtteranceObj.rate = 1.0;
+    currentUtteranceObj.rate = 0.95; // Un poco más lento para enmascarar lo sintético y sonar más humano
     currentUtteranceObj.volume = 1.0;
     
-    const voices = window.speechSynthesis.getVoices();
-    const spanishVoice = voices.find(v => v.lang.includes('es'));
-    if (spanishVoice) {
-      currentUtteranceObj.voice = spanishVoice;
+    const voiceSelect = document.getElementById('voice-select');
+    const selectedVoiceName = voiceSelect ? voiceSelect.value : null;
+    
+    if (selectedVoiceName) {
+      const selectedVoice = availableVoices.find(v => v.name === selectedVoiceName);
+      if (selectedVoice) currentUtteranceObj.voice = selectedVoice;
+    } else {
+      const spanishVoice = availableVoices.find(v => v.lang.includes('es'));
+      if (spanishVoice) currentUtteranceObj.voice = spanishVoice;
     }
 
     currentUtteranceObj.onstart = () => {
