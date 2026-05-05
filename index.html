@@ -1006,7 +1006,6 @@ function toggleReadAloud() {
   
   // Dividir el texto en oraciones cortas para evitar el límite de 15 segundos de Chrome
   const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
-  let currentChunkIndex = 0;
   const validChunks = textChunks.map(c => c.trim()).filter(c => c.length > 0);
 
   if (validChunks.length === 0) return;
@@ -1015,25 +1014,11 @@ function toggleReadAloud() {
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
   lucide.createIcons();
 
-  function speakNextChunk() {
-    // Si se canceló la lectura manual o ya no hay texto, terminamos
-    if (currentChunkIndex >= textChunks.length || !isSpeaking) {
-      isSpeaking = false;
-      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
-      lucide.createIcons();
-      return;
-    }
   const voiceSelect = document.getElementById('voice-select');
   const selectedVoiceName = voiceSelect ? voiceSelect.value : null;
   let voiceToUse = selectedVoiceName ? availableVoices.find(v => v.name === selectedVoiceName) : null;
   if (!voiceToUse) voiceToUse = availableVoices.find(v => v.lang.includes('es'));
 
-    let chunk = textChunks[currentChunkIndex].trim();
-    if (!chunk) {
-      currentChunkIndex++;
-      speakNextChunk();
-      return;
-    }
   // Enviar todas las oraciones a la cola interna del navegador a la vez
   validChunks.forEach((chunk, index) => {
     let utterance = new SpeechSynthesisUtterance(chunk);
@@ -1042,20 +1027,6 @@ function toggleReadAloud() {
     utterance.volume = 1.0;
     if (voiceToUse) utterance.voice = voiceToUse;
 
-    currentUtteranceObj = new SpeechSynthesisUtterance(chunk);
-    currentUtteranceObj.lang = 'es-ES';
-    currentUtteranceObj.rate = 0.95;
-    currentUtteranceObj.volume = 1.0;
-    
-    const voiceSelect = document.getElementById('voice-select');
-    const selectedVoiceName = voiceSelect ? voiceSelect.value : null;
-    
-    if (selectedVoiceName) {
-      const selectedVoice = availableVoices.find(v => v.name === selectedVoiceName);
-      if (selectedVoice) currentUtteranceObj.voice = selectedVoice;
-    } else {
-      const spanishVoice = availableVoices.find(v => v.lang.includes('es'));
-      if (spanishVoice) currentUtteranceObj.voice = spanishVoice;
     // Solo restaurar el botón cuando termine el ÚLTIMO fragmento
     if (index === validChunks.length - 1) {
       utterance.onend = () => {
@@ -1065,14 +1036,6 @@ function toggleReadAloud() {
       };
     }
 
-    // Al terminar una oración, reproducimos la siguiente automáticamente
-    currentUtteranceObj.onend = () => {
-      currentChunkIndex++;
-      speakNextChunk();
-    };
-
-    currentUtteranceObj.onerror = (e) => {
-      console.warn("Error o interrupción del TTS:", e);
     utterance.onerror = (e) => {
       // Ignoramos el error si fue porque el usuario canceló la lectura
       if (e.error !== 'interrupted' && e.error !== 'canceled') {
@@ -1083,10 +1046,6 @@ function toggleReadAloud() {
       lucide.createIcons();
     };
 
-    window.speechSynthesis.speak(currentUtteranceObj);
-  }
-
-  setTimeout(() => speakNextChunk(), 100);
     // Agregamos a la cola nativa (el navegador las enlaza sin pausas artificiales)
     window.speechSynthesis.speak(utterance);
   });
