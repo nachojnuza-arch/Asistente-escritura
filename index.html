@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Asistente de Escritura Pro</title>
 
 <!-- Enlaces PWA -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f172a">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l7.586 7.586'/><circle cx='11' cy='11' r='2'/></svg>">
 
@@ -32,6 +34,8 @@
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
     --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
     --transition: 0.2s ease;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,6 +48,8 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   /* --- TOPBAR --- */
@@ -53,49 +59,73 @@
     justify-content: space-between;
     background: var(--topbar-bg);
     color: white;
-    padding: 0.6rem 1.5rem;
+    padding: 0.6rem 1rem;
     flex-shrink: 0;
     box-shadow: var(--shadow-sm);
     z-index: 20;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding-top: calc(0.6rem + var(--safe-top));
   }
 
   .brand {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     color: white;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .brand span {
+    display: inline;
   }
 
   .topbar-actions {
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
+    gap: 4px;
+    flex-wrap: nowrap;
     align-items: center;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
   }
 
   .tb-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     background: transparent;
     border: 1px solid transparent;
-    color: #cbd5e1; /* Gris claro */
-    padding: 0.35rem 0.6rem;
+    color: #cbd5e1;
+    padding: 0.35rem 0.5rem;
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 500;
     transition: all var(--transition);
+    white-space: nowrap;
+    touch-action: manipulation;
+    min-height: 32px;
   }
 
-  /* Resaltado al pasar el ratón */
   .tb-btn:hover { 
     background: rgba(255,255,255,0.15); 
     color: white;
+  }
+  
+  .tb-btn:active {
+    background: rgba(255,255,255,0.25);
+    transform: scale(0.96);
   }
   
   .tb-btn.primary { 
@@ -120,14 +150,29 @@
     background: white;
     color: var(--text-main);
     border: 1px solid transparent;
-    padding: 0.35rem 0.6rem;
+    padding: 0.3rem 0.4rem;
     border-radius: var(--radius);
     font-family: inherit;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     outline: none;
     box-shadow: var(--shadow-sm);
+    min-height: 32px;
+    max-width: 130px;
+  }
+
+  .tb-label-btn {
+    display: none;
+  }
+
+  /* Separador vertical en topbar */
+  .tb-sep {
+    width: 1px;
+    height: 16px;
+    background: rgba(255,255,255,0.2);
+    margin: 0 2px;
+    flex-shrink: 0;
   }
 
   /* --- ESTRUCTURA PRINCIPAL --- */
@@ -182,20 +227,25 @@
     color: var(--text-muted);
     cursor: pointer;
     display: flex;
-    padding: 4px;
+    padding: 8px;
     border-radius: 4px;
     transition: color var(--transition);
+    min-width: 36px;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
   }
   .chat-close:hover { color: var(--text-main); background: #e2e8f0; }
 
   #chat-messages {
     flex: 1;
-    padding: 1.25rem;
+    padding: 1rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     background: var(--bg-panel);
+    -webkit-overflow-scrolling: touch;
   }
 
   .chat-message {
@@ -236,21 +286,23 @@
 
   #chat-form {
     display: flex;
-    padding: 1rem;
+    padding: 0.75rem;
     background: white;
     border-top: 1px solid var(--border);
     gap: 8px;
+    padding-bottom: calc(0.75rem + var(--safe-bottom));
   }
 
   #chat-input {
     flex: 1;
-    padding: 0.5rem 0.8rem;
+    padding: 0.6rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: 20px;
     outline: none;
     font-family: inherit;
     font-size: 0.85rem;
     transition: border-color var(--transition);
+    min-height: 36px;
   }
   #chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
 
@@ -258,8 +310,8 @@
     background: var(--accent);
     color: white;
     border: none;
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -267,9 +319,14 @@
     cursor: pointer;
     transition: background var(--transition);
     box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+    touch-action: manipulation;
   }
   #chat-form button:hover { 
     background: var(--accent-hover); 
+  }
+  #chat-form button:active {
+    transform: scale(0.92);
   }
 
   /* --- EDITOR (DERECHA) --- */
@@ -283,29 +340,40 @@
 
   #editor-toolbar {
     background: var(--bg-panel);
-    padding: 0.4rem 1rem;
+    padding: 0.35rem 0.5rem;
     border-bottom: 1px solid var(--border);
     display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
     align-items: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     z-index: 5;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+
+  #editor-toolbar::-webkit-scrollbar {
+    display: none;
   }
 
   .toolbar-group {
     display: flex;
     align-items: center;
     gap: 2px;
-    padding-right: 12px;
+    padding-right: 8px;
     border-right: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .toolbar-group:last-child { border-right: none; }
 
   #editor-toolbar button, #editor-toolbar select, #editor-toolbar input[type="color"] {
     background: transparent;
     border: 1px solid transparent;
-    padding: 4px;
+    padding: 6px;
     border-radius: 4px;
     cursor: pointer;
     color: var(--text-muted);
@@ -314,12 +382,35 @@
     justify-content: center;
     transition: all 0.2s;
     font-family: inherit;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    min-width: 32px;
+    min-height: 32px;
+    touch-action: manipulation;
   }
 
-  #editor-toolbar select { border: 1px solid transparent; padding: 4px 6px; }
+  #editor-toolbar button:active {
+    background: #e2e8f0;
+    transform: scale(0.92);
+  }
+
+  #editor-toolbar select { 
+    border: 1px solid transparent; 
+    padding: 4px 6px; 
+    min-width: 60px;
+    max-width: 90px;
+    font-size: 0.7rem;
+  }
   #editor-toolbar select:hover { border-color: var(--border); background: #f8fafc; }
-  #editor-toolbar input[type="color"] { padding: 0; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  #editor-toolbar input[type="color"] { 
+    padding: 0; 
+    width: 28px; 
+    height: 28px; 
+    min-width: 28px;
+    min-height: 28px;
+    border: 1px solid var(--border); 
+    border-radius: 4px; 
+    overflow: hidden; 
+  }
   #editor-toolbar input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
   #editor-toolbar input[type="color"]::-webkit-color-swatch { border: none; }
   
@@ -330,7 +421,7 @@
 
   /* --- ESTILOS DICTADO DE VOZ --- */
   .recording {
-    color: #ef4444 !important; /* Rojo al grabar */
+    color: #ef4444 !important;
     animation: pulse-recording 1.5s infinite;
   }
   @keyframes pulse-recording {
@@ -341,18 +432,22 @@
 
   #page-counter {
     margin-left: auto;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
     font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0 2px;
   }
 
   #pages-container {
     flex: 1;
     overflow-y: auto;
-    padding: 3rem 1rem;
+    padding: 2rem 0.75rem;
     display: flex;
     flex-direction: column;
     align-items: center;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* DOCUMENTO ÚNICO CONTINUO */
@@ -360,7 +455,7 @@
     background: white;
     width: 100%;
     max-width: 800px; 
-    min-height: 1130px; 
+    min-height: 500px; 
     height: max-content; 
     flex-shrink: 0; 
     white-space: pre-wrap; 
@@ -369,8 +464,8 @@
     box-shadow: var(--shadow-md);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    margin-bottom: 4rem;
-    padding: 80px 70px; 
+    margin-bottom: 3rem;
+    padding: 60px 50px; 
     box-sizing: border-box;
     outline: none;
     font-family: 'Arial', sans-serif;
@@ -378,6 +473,7 @@
     line-height: 1.6;
     color: #000;
     transition: box-shadow var(--transition), border-color var(--transition);
+    -webkit-user-modify: read-write;
   }
 
   #text-editor:focus {
@@ -386,9 +482,10 @@
   }
 
   #text-editor:empty::before {
-    content: 'Comienza a escribir, dicta por voz o pega tu texto aquí...\n\nTip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente (subrayado rojo).\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice sin gastar tu cuota gratuita.';
+    content: 'Comienza a escribir, dicta por voz o pega tu texto aquí...\n\nTip: Escribe de forma natural. El navegador detectará errores de ortografía automáticamente.\nSelecciona una parte del texto y presiona "Corregir" para que la IA la analice.';
     color: #a1a1aa;
     pointer-events: none;
+    white-space: pre-wrap;
   }
 
   /* ESTILOS PARA LOS ERRORES IA */
@@ -403,22 +500,22 @@
 
   /* CAJA DE SUGERENCIAS FLOTANTE */
   .suggestion-box {
-    position: absolute;
+    position: fixed;
     background: white;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     z-index: 1000;
     overflow: hidden;
     min-width: 200px;
-    max-width: 300px;
+    max-width: 90vw;
     font-family: 'Inter', sans-serif;
     font-size: 0.85rem;
   }
 
   .suggestion-box .sugg-header {
     background: var(--bg-main);
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     font-weight: 600;
     color: var(--text-muted);
@@ -428,7 +525,7 @@
   }
 
   .suggestion-box .sugg-item {
-    padding: 10px 12px;
+    padding: 12px 14px;
     cursor: pointer;
     border-bottom: 1px solid var(--bg-main);
     color: var(--accent);
@@ -437,17 +534,13 @@
     align-items: center;
     gap: 6px;
     transition: background 0.2s;
+    min-height: 44px;
   }
   
   .suggestion-box .sugg-item:hover { background: #f8fafc; }
-
-  @media (max-width: 768px) {
-    #text-editor { padding: 40px 24px; }
-    body.chat-visible #chat-container { width: 100%; position: absolute; height: 100%; z-index: 50; }
-  }
+  .suggestion-box .sugg-item:active { background: #e2e8f0; }
 
   /* --- LECTOR DE VOZ (RESALTADO DINÁMICO) --- */
-  /* Sobrescribimos el color de la selección de texto tradicional solo cuando está leyendo */
   body.is-speaking ::selection {
     background-color: rgba(37, 99, 235, 0.25) !important;
     color: inherit;
@@ -466,11 +559,12 @@
     z-index: 1000;
     display: none; align-items: center; justify-content: center;
     opacity: 0; transition: opacity 0.2s;
+    padding: 10px;
   }
   .modal-overlay.show { display: flex; opacity: 1; }
   .modal-box {
     background: var(--bg-panel); border-radius: var(--radius);
-    width: 90%; max-width: 500px; max-height: 80vh;
+    width: 100%; max-width: 500px; max-height: 85vh;
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     display: flex; flex-direction: column;
     transform: translateY(20px); transition: transform 0.3s;
@@ -480,26 +574,35 @@
     display: flex; justify-content: space-between; align-items: center;
     padding: 16px 20px; border-bottom: 1px solid var(--border);
   }
-  .modal-header h3 { font-size: 1.1rem; color: var(--text-main); font-weight: 600; }
-  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: 4px; transition: 0.2s; }
+  .modal-header h3 { font-size: 1rem; color: var(--text-main); font-weight: 600; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 4px; transition: 0.2s; min-width: 36px; min-height: 36px; display: flex; align-items: center; justify-content: center; }
   .modal-close:hover { background: #f1f5f9; color: var(--text-main); }
-  .modal-body { padding: 10px 20px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .modal-close:active { background: #e2e8f0; }
+  .modal-body { padding: 10px 16px 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
   
   .library-item {
     display: flex; justify-content: space-between; align-items: center;
     padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius);
     background: white; transition: all 0.2s;
+    min-height: 52px;
   }
   .library-item:hover { border-color: #93c5fd; box-shadow: var(--shadow-sm); }
-  .library-item-info { flex: 1; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
-  .library-item-title { font-weight: 500; font-size: 0.95rem; color: var(--text-main); }
-  .library-item-date { font-size: 0.75rem; color: var(--text-muted); }
-  .library-item-actions { display: flex; gap: 4px; }
+  .library-item:active { border-color: var(--accent); }
+  .library-item-info { flex: 1; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 4px 0; min-height: 40px; }
+  .library-item-title { font-weight: 500; font-size: 0.9rem; color: var(--text-main); }
+  .library-item-date { font-size: 0.7rem; color: var(--text-muted); }
+  .library-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
   .library-item-actions button {
     background: #f8fafc; border: 1px solid transparent; cursor: pointer;
-    color: var(--text-muted); padding: 6px; border-radius: 4px; transition: 0.2s;
+    color: var(--text-muted); padding: 8px; border-radius: 4px; transition: 0.2s;
+    min-width: 36px; min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
   }
   .library-item-actions button:hover { background: #e2e8f0; color: var(--accent); }
+  .library-item-actions button:active { transform: scale(0.92); }
   .library-item-actions button.del-btn:hover { color: #ef4444; background: #fee2e2; }
 
   /* COMPONENTES AUXILIARES */
@@ -536,15 +639,231 @@
     transform: translateX(-50%) translateY(100px);
     background: var(--topbar-bg);
     color: white;
-    padding: 8px 16px;
+    padding: 10px 20px;
     border-radius: 20px;
     font-size: 0.8rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 999;
     pointer-events: none;
+    white-space: nowrap;
+    max-width: 90vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    bottom: calc(24px + var(--safe-bottom));
   }
   #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ============================================= */
+  /* === RESPONSIVE: TABLETAS Y MÓVILES === */
+  /* ============================================= */
+
+  /* TABLET (max-width: 1024px) */
+  @media (max-width: 1024px) {
+    #text-editor { padding: 50px 40px; }
+    
+    body.chat-visible #chat-container { width: 45%; }
+  }
+
+  /* MÓVIL GRANDE / TABLET PEQUEÑA (max-width: 768px) */
+  @media (max-width: 768px) {
+    /* Topbar: más compacta */
+    #topbar { 
+      padding: 0.5rem 0.6rem; 
+      gap: 4px;
+      padding-top: calc(0.5rem + var(--safe-top));
+    }
+    .brand { font-size: 0.75rem; }
+    .brand span { 
+      display: none; 
+    }
+    .tb-btn { 
+      font-size: 0.7rem; 
+      padding: 0.3rem 0.4rem;
+      min-height: 28px;
+    }
+    #ai-role-select, #download-format-select { 
+      font-size: 0.7rem; 
+      padding: 0.25rem 0.35rem;
+      min-height: 28px;
+      max-width: 100px;
+    }
+    
+    /* Chat: overlay completo en móvil */
+    body.chat-visible #chat-container { 
+      width: 100%; 
+      position: absolute; 
+      height: 100%; 
+      z-index: 50;
+      border-right: none;
+      box-shadow: 0 0 20px rgba(0,0,0,0.15);
+    }
+
+    /* Editor: paddings reducidos */
+    #pages-container { 
+      padding: 1rem 0.5rem; 
+    }
+    #text-editor { 
+      padding: 30px 20px; 
+      min-height: 400px;
+      font-size: 10pt;
+      margin-bottom: 2rem;
+    }
+
+    /* Toolbar más compacto */
+    #editor-toolbar { 
+      padding: 0.25rem 0.4rem; 
+      gap: 0.2rem; 
+    }
+    .toolbar-group { 
+      padding-right: 6px; 
+    }
+    #editor-toolbar button, #editor-toolbar select, #editor-toolbar input[type="color"] { 
+      min-width: 28px; 
+      min-height: 28px; 
+      padding: 4px;
+    }
+    #editor-toolbar select { 
+      min-width: 50px; 
+      max-width: 70px; 
+      font-size: 0.65rem;
+    }
+    #editor-toolbar input[type="color"] { 
+      width: 24px; 
+      height: 24px; 
+      min-width: 24px; 
+      min-height: 24px; 
+    }
+    #page-counter { 
+      font-size: 0.6rem; 
+    }
+    #voice-select { 
+      max-width: 80px;
+      font-size: 0.65rem;
+    }
+
+    /* Chat dentro de móvil */
+    #chat-container {
+      border-right: none !important;
+    }
+    .chat-header { 
+      padding: 0.7rem 1rem; 
+    }
+    #chat-messages { 
+      padding: 0.75rem; 
+    }
+    #chat-form { 
+      padding: 0.6rem; 
+    }
+    .chat-message { 
+      max-width: 95%; 
+      font-size: 0.8rem;
+    }
+
+    /* Suggestion box: se adapta */
+    .suggestion-box {
+      position: fixed;
+      left: 5vw !important;
+      right: 5vw !important;
+      top: auto !important;
+      bottom: 80px !important;
+      max-width: 90vw;
+      min-width: 0;
+      width: 90vw;
+    }
+
+    /* Modal */
+    .modal-box { 
+      max-height: 90vh; 
+      margin: 0 10px;
+    }
+
+    /* Loading */
+    #loading p { 
+      font-size: 0.8rem; 
+      padding: 0 20px;
+      text-align: center;
+    }
+
+    /* Toast */
+    #toast { 
+      font-size: 0.75rem; 
+      padding: 8px 16px;
+      bottom: calc(16px + var(--safe-bottom));
+    }
+  }
+
+  /* MÓVIL PEQUEÑO (max-width: 480px) */
+  @media (max-width: 480px) {
+    #topbar { 
+      padding: 0.4rem 0.5rem; 
+      gap: 3px;
+    }
+    .brand { 
+      font-size: 0.7rem; 
+    }
+    .tb-btn { 
+      font-size: 0.65rem; 
+      padding: 0.25rem 0.3rem;
+      min-height: 26px;
+    }
+    #ai-role-select, #download-format-select { 
+      font-size: 0.65rem; 
+      padding: 0.2rem 0.25rem;
+      min-height: 26px;
+      max-width: 80px;
+    }
+
+    #text-editor { 
+      padding: 20px 14px; 
+      min-height: 350px;
+      font-size: 9.5pt;
+    }
+
+    #editor-toolbar button, #editor-toolbar select, #editor-toolbar input[type="color"] { 
+      min-width: 26px; 
+      min-height: 26px; 
+      padding: 3px;
+    }
+
+    .chat-message { 
+      font-size: 0.78rem; 
+      padding: 8px 12px;
+    }
+  }
+
+  /* LANDSCAPE en móvil */
+  @media (max-width: 768px) and (orientation: landscape) {
+    #pages-container { 
+      padding: 0.5rem 0.5rem; 
+    }
+    #text-editor { 
+      padding: 16px 14px; 
+      min-height: 250px;
+      margin-bottom: 1rem;
+    }
+    #topbar { 
+      padding: 0.3rem 0.5rem; 
+    }
+    #editor-toolbar { 
+      padding: 0.2rem 0.3rem; 
+    }
+    #chat-container {
+      max-height: 100%;
+    }
+  }
+
+  /* UTILIDADES: Elimina la selección azul en toques */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Inputs nativos se ven bien en iOS */
+  input, select, textarea, button {
+    appearance: auto;
+    -webkit-appearance: auto;
+    border-radius: var(--radius);
+  }
 </style>
 </head>
 <body>
@@ -552,35 +871,35 @@
 <!-- TOPBAR -->
 <div id="topbar" role="banner">
   <div class="brand">
-    <i data-lucide="pen-tool" size="18"></i>
-    Asistente de Escritura
+    <i data-lucide="pen-tool" size="16"></i>
+    <span>Asistente de Escritura</span>
   </div>
   <div class="topbar-actions">
     
     <!-- Selector de Rol IA -->
     <select id="ai-role-select" title="Selecciona el rol de la IA">
-      <option value="literario">Asistente Literario</option>
-      <option value="profesor">Profesor Universitario</option>
+      <option value="literario">Literario</option>
+      <option value="profesor">Profesor</option>
     </select>
 
     <button id="library-btn" class="tb-btn" title="Mi Biblioteca">
-      <i data-lucide="library" size="14"></i> Biblioteca
+      <i data-lucide="library" size="14"></i><span class="tb-label-btn"> Biblio</span>
     </button>
     <button id="new-doc-btn" class="tb-btn" title="Nuevo Documento">
-      <i data-lucide="file-plus" size="14"></i> Nuevo
+      <i data-lucide="file-plus" size="14"></i><span class="tb-label-btn"> Nuevo</span>
     </button>
 
     <button id="change-api-key-btn" class="tb-btn" title="Configurar API Key">
-      <i data-lucide="key" size="14"></i> API Key
+      <i data-lucide="key" size="14"></i>
     </button>
     <button id="save-now-btn" class="tb-btn" title="Guardar Progreso">
-      <i data-lucide="save" size="14"></i> Guardar
+      <i data-lucide="save" size="14"></i>
     </button>
     <button id="toggle-chat-btn" class="tb-btn" title="Abrir/Cerrar Chat IA">
       <i data-lucide="message-square" size="14"></i> Chat
     </button>
     
-    <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+    <div class="tb-sep"></div>
 
     <!-- BOTONES IA -->
     <button id="check-errors-btn" class="tb-btn primary" title="Subrayar errores en selección o documento">
@@ -595,7 +914,7 @@
       <option value="pdf">PDF</option>
     </select>
     <button id="download-btn" class="tb-btn" title="Descargar Documento">
-      <i data-lucide="download" size="14"></i> Descargar
+      <i data-lucide="download" size="14"></i>
     </button>
   </div>
 </div>
@@ -627,28 +946,28 @@
     <div id="editor-container">
       <div id="editor-toolbar">
         <div class="toolbar-group">
-          <button type="button" id="clear-doc-btn" title="Limpiar Hoja de Texto"><i data-lucide="eraser" size="14"></i></button>
-          <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="14"></i></button>
-          <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="14"></i></button>
+          <button type="button" id="clear-doc-btn" title="Limpiar Hoja de Texto"><i data-lucide="eraser" size="13"></i></button>
+          <button type="button" id="undo-btn" title="Deshacer"><i data-lucide="undo" size="13"></i></button>
+          <button type="button" id="redo-btn" title="Rehacer"><i data-lucide="redo" size="13"></i></button>
         </div>
 
         <div class="toolbar-group">
-          <button type="button" id="bold-btn" title="Negrita"><i data-lucide="bold" size="14"></i></button>
-          <button type="button" id="italic-btn" title="Cursiva"><i data-lucide="italic" size="14"></i></button>
-          <button type="button" id="underline-btn" title="Subrayado"><i data-lucide="underline" size="14"></i></button>
+          <button type="button" id="bold-btn" title="Negrita"><i data-lucide="bold" size="13"></i></button>
+          <button type="button" id="italic-btn" title="Cursiva"><i data-lucide="italic" size="13"></i></button>
+          <button type="button" id="underline-btn" title="Subrayado"><i data-lucide="underline" size="13"></i></button>
         </div>
 
         <div class="toolbar-group">
-          <button type="button" id="align-left-btn" title="Alinear a la izquierda"><i data-lucide="align-left" size="14"></i></button>
-          <button type="button" id="align-center-btn" title="Centrar texto"><i data-lucide="align-center" size="14"></i></button>
-          <button type="button" id="align-right-btn" title="Alinear a la derecha"><i data-lucide="align-right" size="14"></i></button>
+          <button type="button" id="align-left-btn" title="Alinear a la izquierda"><i data-lucide="align-left" size="13"></i></button>
+          <button type="button" id="align-center-btn" title="Centrar texto"><i data-lucide="align-center" size="13"></i></button>
+          <button type="button" id="align-right-btn" title="Alinear a la derecha"><i data-lucide="align-right" size="13"></i></button>
         </div>
 
         <div class="toolbar-group">
           <select id="font-family-select" aria-label="Tipo de letra" title="Fuente">
             <option value="Arial, sans-serif" selected>Arial</option>
-            <option value="'Times New Roman', serif">Times New Roman</option>
-            <option value="'Courier New', monospace">Courier New</option>
+            <option value="'Times New Roman', serif">Times</option>
+            <option value="'Courier New', monospace">Courier</option>
             <option value="'Inter', sans-serif">Inter</option>
           </select>
           <input type="color" id="font-color-picker" value="#000000" title="Color de texto">
@@ -664,18 +983,18 @@
         <!-- Grupo de Voz y Sonido -->
         <div class="toolbar-group">
           <!-- Selector de Voces -->
-          <select id="voice-select" aria-label="Voz del lector" title="Seleccionar voz" style="max-width: 140px; text-overflow: ellipsis; font-size: 0.75rem;"></select>
+          <select id="voice-select" aria-label="Voz del lector" title="Seleccionar voz" style="max-width: 100px; text-overflow: ellipsis; font-size: 0.7rem;"></select>
           <!-- Botón de lectura existente -->
-          <button type="button" id="read-aloud-btn" title="Leer en voz alta (Reproducir/Pausar)"><i data-lucide="volume-2" size="14"></i></button>
-          <!-- NUEVO BOTÓN: Dictado por Voz -->
-          <button type="button" id="dictation-btn" title="Dictado por voz (Activar/Desactivar)"><i data-lucide="mic" size="14"></i></button>
+          <button type="button" id="read-aloud-btn" title="Leer en voz alta (Reproducir/Pausar)"><i data-lucide="volume-2" size="13"></i></button>
+          <!-- Botón Dictado por Voz -->
+          <button type="button" id="dictation-btn" title="Dictado por voz (Activar/Desactivar)"><i data-lucide="mic" size="13"></i></button>
         </div>
 
-        <span id="page-counter" aria-live="polite">Aprox. 1 página(s)</span>
+        <span id="page-counter" aria-live="polite">1 pág</span>
       </div>
       
       <div id="pages-container">
-        <!-- Editor Único de Texto con Autocorrección Nativa (autocorrect / autocapitalize) -->
+        <!-- Editor Único de Texto con Autocorrección Nativa -->
         <div id="text-editor" contenteditable="true" spellcheck="true" autocorrect="on" autocapitalize="sentences" lang="es"></div>
       </div>
     </div>
@@ -774,6 +1093,31 @@ document.addEventListener('DOMContentLoaded', () => {
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', () => document.body.classList.toggle('chat-visible'));
   if (closeChatBtn) closeChatBtn.addEventListener('click', () => document.body.classList.remove('chat-visible'));
 
+  // Cerrar el chat con gesto de swipe hacia abajo en móvil
+  if (closeChatBtn) {
+    let touchStartY = 0;
+    const chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+      chatContainer.addEventListener('touchstart', (e) => {
+        if (chatContainer.scrollTop === 0) {
+          touchStartY = e.touches[0].clientY;
+        } else {
+          touchStartY = 0;
+        }
+      }, { passive: true });
+      
+      chatContainer.addEventListener('touchmove', (e) => {
+        if (touchStartY > 0) {
+          const deltaY = e.touches[0].clientY - touchStartY;
+          if (deltaY > 80) {
+            document.body.classList.remove('chat-visible');
+            touchStartY = 0;
+          }
+        }
+      }, { passive: true });
+    }
+  }
+
   // Manejador de Cambio de API KEY
   const changeApiKeyBtn = document.getElementById('change-api-key-btn');
   if (changeApiKeyBtn) {
@@ -800,10 +1144,12 @@ document.addEventListener('DOMContentLoaded', () => {
   btn('align-center-btn', () => applyTextAlignment('justifyCenter'));
   btn('align-right-btn', () => applyTextAlignment('justifyRight'));
 
-  // Evitar pérdida de foco
-  document.querySelectorAll('#editor-toolbar button').forEach(el => {
-    el.addEventListener('mousedown', (event) => event.preventDefault());
-  });
+  // Evitar pérdida de foco en desktop, pero permitir en móvil
+  if (!('ontouchstart' in window)) {
+    document.querySelectorAll('#editor-toolbar button').forEach(el => {
+      el.addEventListener('mousedown', (event) => event.preventDefault());
+    });
+  }
 
   document.getElementById('font-family-select')?.addEventListener('change', (e) => {
     if (e.target.value) { applyTextFamily(e.target.value); textEditor.focus(); }
@@ -842,6 +1188,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Vincular botón de lectura
   btn('read-aloud-btn', toggleReadAloud);
+
+  // Detectar si es dispositivo táctil y ajustar placeholder del editor
+  if ('ontouchstart' in window) {
+    const editorPlaceholder = textEditor.getAttribute('data-placeholder-mobile');
+    if (editorPlaceholder) {
+      // El placeholder está en CSS via :empty::before, no necesita cambio
+    }
+  }
 });
 
 // --- MÓDULO DE DICTADO DE VOZ CON ESCRITURA EN VIVO (CORREGIDO) ---
@@ -890,10 +1244,8 @@ function initDictationModule() {
     textEditor.focus();
 
     // 1. ELIMINACIÓN SEGURA DEL TEXTO EN VIVO: 
-    // Lo borramos usando el DOM para garantizar que no se quede pegado y nos duplique el texto
     if (interimSpan) {
       if (interimSpan.parentNode) {
-        // Restaurar cursor exactamente a donde estaba antes del span gris
         const sel = window.getSelection();
         const range = document.createRange();
         range.setStartBefore(interimSpan);
@@ -901,7 +1253,6 @@ function initDictationModule() {
         sel.removeAllRanges();
         sel.addRange(range);
         
-        // Eliminar el nodo de forma segura
         interimSpan.remove();
       }
       interimSpan = null;
@@ -931,7 +1282,6 @@ function initDictationModule() {
     // 3. NUEVO TEXTO EN VIVO: Se inserta y se le obliga a tener estilos en línea
     if (interimTranscript) {
       interimSpan = document.createElement('span');
-      // Aseguramos estilos en línea por si el editor contenteditable los borra
       interimSpan.style.color = '#94a3b8';
       interimSpan.style.fontStyle = 'italic';
       interimSpan.style.borderBottom = '1px dashed #cbd5e1';
@@ -943,7 +1293,6 @@ function initDictationModule() {
         const range = sel.getRangeAt(0);
         range.insertNode(interimSpan);
         
-        // Mover cursor a la derecha del span para que parezca que avanza
         const newRange = document.createRange();
         newRange.setStartAfter(interimSpan);
         newRange.collapse(true);
@@ -1058,9 +1407,9 @@ function populateVoiceList() {
 
   voicesToShow.forEach((voice) => {
     const option = document.createElement('option');
-    let displayName = voice.name.replace(/Microsoft |Google /g, ''); // Limpiar nombres largos
+    let displayName = voice.name.replace(/Microsoft |Google /g, '');
     if (voice.name.includes('Natural') || voice.name.includes('Google')) {
-      displayName = '⭐ ' + displayName; // Destacar con una estrella las voces de alta calidad
+      displayName = '⭐ ' + displayName;
     }
     option.textContent = displayName;
     option.value = voice.name;
@@ -1074,7 +1423,7 @@ function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
-    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+    document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
     lucide.createIcons();
     showToast("Lectura detenida");
     return;
@@ -1108,7 +1457,7 @@ function toggleReadAloud() {
   if (validChunks.length === 0) return;
 
   isSpeaking = true;
-  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="14"></i>';
+  document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="13"></i>';
   lucide.createIcons();
 
   const voiceSelect = document.getElementById('voice-select');
@@ -1128,22 +1477,20 @@ function toggleReadAloud() {
     if (index === validChunks.length - 1) {
       utterance.onend = () => {
         isSpeaking = false;
-        document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+        document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
         lucide.createIcons();
       };
     }
 
     utterance.onerror = (e) => {
-      // Ignoramos el error si fue porque el usuario canceló la lectura
       if (e.error !== 'interrupted' && e.error !== 'canceled') {
         console.warn("Error del TTS:", e);
       }
       isSpeaking = false;
-      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="14"></i>';
+      document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
       lucide.createIcons();
     };
 
-    // Agregamos a la cola nativa (el navegador las enlaza sin pausas artificiales)
     window.speechSynthesis.speak(utterance);
   });
 }
@@ -1334,9 +1681,18 @@ function showAISuggestions(el) {
     showToast("Cambio aplicado");
   });
   
-  setTimeout(() => document.addEventListener('click', function close(e) {
-    if (!box.contains(e.target)) { box.remove(); document.removeEventListener('click', close); }
-  }), 100);
+  // Cerrar al tocar fuera
+  setTimeout(() => {
+    const closeHandler = (e) => {
+      if (!box.contains(e.target)) { 
+        box.remove(); 
+        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('touchstart', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+    document.addEventListener('touchstart', closeHandler);
+  }, 100);
 }
 
 
@@ -1514,7 +1870,7 @@ function updatePageCounter() {
   if (!counter || !textEditor) return;
   const height = textEditor.scrollHeight;
   const estimatedPages = Math.max(1, Math.ceil(height / 1130));
-  counter.textContent = `Aprox. ${estimatedPages} página(s)`;
+  counter.textContent = `Aprox. ${estimatedPages} pág`;
 }
 
 // --- SISTEMA DE BIBLIOTECA Y AUTOGUARDADO ---
@@ -1572,8 +1928,8 @@ function createNewDocumentUI() {
   const title = prompt("Asigna un título al nuevo documento:", "Documento sin título");
   if (title === null) return; 
   
-  window.speechSynthesis.cancel(); // Detener lectura si estaba activo
-  saveContent(); // Guardar el actual antes de cambiar
+  window.speechSynthesis.cancel();
+  saveContent();
   
   currentDocId = Date.now().toString();
   docsList.push({ id: currentDocId, title: title.trim() || "Sin Título", updatedAt: Date.now() });
@@ -1685,7 +2041,7 @@ function renderLibrary() {
   lucide.createIcons();
 }
 
-function startAutoSave() { setInterval(() => saveContent(false), 3000); } // Guardado cada 3s es suficiente
+function startAutoSave() { setInterval(() => saveContent(false), 3000); }
 
 // --- EXPORTACIÓN A PDF Y DOCX ---
 function handleDownload() {
@@ -1706,11 +2062,10 @@ function downloadAsPDF() {
   if (currentDoc) defaultTitle = currentDoc.title;
   
   const title = prompt("Confirma el título del PDF:", defaultTitle);
-  if (title === null) return; // Se canceló
+  if (title === null) return;
   
   showLoading("Generando archivo PDF...");
   
-  // Creamos un contenedor limpio para el PDF
   const element = document.createElement('div');
   element.innerHTML = `
     <h2 style="text-align:center; font-family: 'Helvetica', 'Arial', sans-serif; margin-bottom: 25px; color: #1e293b;">${title || 'Documento'}</h2>
