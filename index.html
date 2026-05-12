@@ -550,6 +550,25 @@
     text-underline-offset: 3px;
   }
 
+  /* Resaltado de la palabra que se está leyendo */
+  .read-aloud-highlight {
+    background-color: rgba(37, 99, 235, 0.2) !important;
+    border-radius: 2px;
+    transition: background-color 0.1s ease;
+  }
+  
+  .read-aloud-word {
+    transition: background-color 0.15s ease;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  
+  .read-aloud-word.active {
+    background-color: rgba(37, 99, 235, 0.35) !important;
+    color: #1e40af !important;
+    font-weight: 500;
+  }
+
   /* --- MODAL DE LA BIBLIOTECA --- */
   .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -1419,10 +1438,55 @@ function populateVoiceList() {
   if (previousSelection) voiceSelect.value = previousSelection;
 }
 
+// Variables para el resaltado de lectura
+let readAloudWordElements = [];
+let currentReadAloudIndex = 0;
+let readAloudChunks = [];
+
+function clearReadAloudHighlights() {
+  readAloudWordElements.forEach(el => el.classList.remove('active'));
+  readAloudWordElements = [];
+  currentReadAloudIndex = 0;
+  readAloudChunks = [];
+}
+
+function highlightReadAloudWord(charIndex, chunkText) {
+  // Encontrar qué palabra corresponde a este charIndex en el chunk
+  // Primero mapeamos el chunk a sus palabras con sus posiciones
+  const words = chunkText.split(/\s+/);
+  let runningLen = 0;
+  let wordIndex = -1;
+  
+  for (let i = 0; i < words.length; i++) {
+    // El espacio antes de la palabra (excepto la primera)
+    if (i > 0) runningLen += 1;
+    if (charIndex >= runningLen && charIndex < runningLen + words[i].length) {
+      wordIndex = i;
+      break;
+    }
+    runningLen += words[i].length;
+  }
+  
+  if (wordIndex >= 0 && wordIndex < readAloudWordElements.length) {
+    // Quitar active de la palabra anterior
+    readAloudWordElements.forEach(el => el.classList.remove('active'));
+    // Poner active en la palabra actual
+    readAloudWordElements[wordIndex].classList.add('active');
+    currentReadAloudIndex = wordIndex;
+    
+    // Auto-scroll para mantener visible la palabra actual
+    const activeEl = readAloudWordElements[wordIndex];
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+}
+
 function toggleReadAloud() {
   if (isSpeaking || window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
     isSpeaking = false;
+    clearReadAloudHighlights();
     document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
     lucide.createIcons();
     showToast("Lectura detenida");
@@ -1430,10 +1494,13 @@ function toggleReadAloud() {
   }
 
   let textToRead = "";
-  const selectedText = window.getSelection().toString().trim();
+  const selection = window.getSelection();
+  const selectedText = selection.toString().trim();
+  let useSelection = false;
 
   if (selectedText.length > 0) {
     textToRead = selectedText;
+    useSelection = true;
     showToast("Leyendo selección...");
   } else {
     textToRead = textEditor.innerText.trim();
@@ -1445,16 +1512,66 @@ function toggleReadAloud() {
     return;
   }
 
-  // Limpiar saltos de línea (el lector los interpreta como pausas aunque no haya punto)
+  // Limpiar saltos de línea
   textToRead = textToRead.replace(/\s+/g, ' ').trim();
 
   window.speechSynthesis.cancel();
   
-  // Dividir el texto en oraciones cortas para evitar el límite de 15 segundos de Chrome
-  const textChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
-  const validChunks = textChunks.map(c => c.trim()).filter(c => c.length > 0);
+  // Dividir el texto en oraciones
+  readAloudChunks = textToRead.match(/[^.!?]+[.!?]*/g) || [textToRead];
+  readAloudChunks = readAloudChunks.map(c => c.trim()).filter(c => c.length > 0);
 
-  if (validChunks.length === 0) return;
+  if (readAloudChunks.length === 0) return;
+
+  // --- CREAR LOS SPANS PARA CADA PALABRA EN EL EDITOR ---
+  clearReadAloudHighlights();
+  
+  // Si estamos leyendo una selección, no podemos modificar el HTML del editor
+  // porque rompería la selección. Para selección usamos resaltado sin envolver palabras.
+  if (!useSelection) {
+    // Envolver cada palabra en un span para poder resaltarla
+    const editorHtml = textEditor.innerHTML;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = editorHtml;
+    
+    // Función recursiva para envolver palabras en nodos de texto
+    function wrapWordsInNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent;
+        if (text.trim().length === 0) return;
+        
+        const words = text.split(/(\s+)/);
+        const fragment = document.createDocumentFragment();
+        
+        words.forEach(word => {
+          if (word.trim().length === 0) {
+            fragment.appendChild(document.createTextNode(word));
+          } else {
+            const span = document.createElement('span');
+            span.className = 'read-aloud-word';
+            span.textContent = word;
+            fragment.appendChild(span);
+          }
+        });
+        
+        node.parentNode.replaceChild(fragment, node);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        // No envolver palabras dentro de etiquetas como <span class="ai-suggestion">
+        if (node.classList && node.classList.contains('ai-suggestion')) {
+          // Dejar las sugerencias IA como están, pero envolver su texto
+          Array.from(node.childNodes).forEach(child => wrapWordsInNode(child));
+        } else {
+          Array.from(node.childNodes).forEach(child => wrapWordsInNode(child));
+        }
+      }
+    }
+    
+    Array.from(tempDiv.childNodes).forEach(child => wrapWordsInNode(child));
+    textEditor.innerHTML = tempDiv.innerHTML;
+    
+    // Recolectar todos los spans .read-aloud-word
+    readAloudWordElements = Array.from(textEditor.querySelectorAll('.read-aloud-word'));
+  }
 
   isSpeaking = true;
   document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="square" size="13"></i>';
@@ -1465,20 +1582,44 @@ function toggleReadAloud() {
   let voiceToUse = selectedVoiceName ? availableVoices.find(v => v.name === selectedVoiceName) : null;
   if (!voiceToUse) voiceToUse = availableVoices.find(v => v.lang.includes('es'));
 
-  // Enviar todas las oraciones a la cola interna del navegador a la vez
-  validChunks.forEach((chunk, index) => {
+  // Acumulador de caracteres a través de todos los chunks para el boundary
+  let globalCharOffset = 0;
+
+  // Enviar todas las oraciones a la cola
+  readAloudChunks.forEach((chunk, index) => {
     let utterance = new SpeechSynthesisUtterance(chunk);
     utterance.lang = 'es-ES';
     utterance.rate = 0.95;
     utterance.volume = 1.0;
     if (voiceToUse) utterance.voice = voiceToUse;
 
+    // Resaltar palabra por palabra usando el evento boundary
+    utterance.onboundary = (event) => {
+      if (event.name === 'word' && readAloudWordElements.length > 0) {
+        const localCharIndex = event.charIndex;
+        highlightReadAloudWord(localCharIndex, chunk);
+      }
+    };
+
+    // Al empezar el primer chunk
+    if (index === 0) {
+      utterance.onstart = () => {
+        // Resaltar primera palabra si existe
+        if (readAloudWordElements.length > 0) {
+          readAloudWordElements.forEach(el => el.classList.remove('active'));
+          readAloudWordElements[0].classList.add('active');
+        }
+      };
+    }
+
     // Solo restaurar el botón cuando termine el ÚLTIMO fragmento
-    if (index === validChunks.length - 1) {
+    if (index === readAloudChunks.length - 1) {
       utterance.onend = () => {
         isSpeaking = false;
+        clearReadAloudHighlights();
         document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
         lucide.createIcons();
+        showToast("Lectura finalizada");
       };
     }
 
@@ -1487,6 +1628,7 @@ function toggleReadAloud() {
         console.warn("Error del TTS:", e);
       }
       isSpeaking = false;
+      clearReadAloudHighlights();
       document.getElementById('read-aloud-btn').innerHTML = '<i data-lucide="volume-2" size="13"></i>';
       lucide.createIcons();
     };
